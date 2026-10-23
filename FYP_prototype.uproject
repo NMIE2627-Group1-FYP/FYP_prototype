@@ -1,0 +1,37 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "{DBE229B3-4645-2F33-D39C-19B2C3174BC8}",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "FYP_prototype",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "ModelContextProtocol",
+			"Enabled": true
+		},
+		{
+			"Name": "AllToolsets",
+			"Enabled": true
+		},
+		{
+			"Name": "Terminal",
+			"Enabled": true
+		}
+	]
+}
