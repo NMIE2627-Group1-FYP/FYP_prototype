@@ -37,7 +37,7 @@ ACreatureCharacter::ACreatureCharacter()
     GetCharacterMovement()->bOrientRotationToMovement = false;
 
     // Surface pace is a walking speed. ApplyStance retunes this per level.
-    GetCharacterMovement()->MaxWalkSpeed = 450.0f;
+    GetCharacterMovement()->MaxWalkSpeed = 500.0f;
     GetCharacterMovement()->MaxAcceleration = 800.0f;
     GetCharacterMovement()->BrakingDecelerationWalking = 1400.0f;
 
@@ -211,11 +211,11 @@ void ACreatureCharacter::ApplyStance()
     const bool bMole =
         World && World->GetMapName().Contains(TEXT("Underground"));
 
-    const float CapsuleRadius = bMole ? 20.0f : 34.0f;
-    const float CapsuleHalfHeight = bMole ? 26.0f : 88.0f;
-    // Eye height above the ground: half height plus the camera offset.
-    const float CameraHeight = bMole ? 6.0f : 72.0f;
-    const float WalkSpeed = bMole ? 150.0f : 450.0f;
+    const float CapsuleRadius = bMole ? 18.0f : 34.0f;
+    const float CapsuleHalfHeight = bMole ? 16.0f : 88.0f;
+    // Surface eye line sits near 160 cm. Underground sits about 8 cm off the floor.
+    const float CameraHeight = bMole ? -8.0f : 72.0f;
+    const float WalkSpeed = bMole ? 180.0f : 500.0f;
 
     GetCapsuleComponent()->SetCapsuleSize(CapsuleRadius, CapsuleHalfHeight, true);
 
@@ -307,7 +307,7 @@ void ACreatureCharacter::Tick(float DeltaSeconds)
 
         UGameplayStatics::OpenLevel(
             this,
-            FName(TEXT("/Game/L_test/Underground"))
+            FName(TEXT("/Game/GameProject/Levels/Underground"))
         );
     }
 }
@@ -333,7 +333,7 @@ void ACreatureCharacter::ShowStartMenu()
 
     UClass* MenuClass = LoadClass<UCreatureStartMenu>(
         nullptr,
-        TEXT("/Game/L_test/UI/WBP_StartMenu.WBP_StartMenu_C")
+        TEXT("/Game/GameProject/Blueprints/WBP_StartMenu.WBP_StartMenu_C")
     );
     if (!MenuClass)
     {
