@@ -12,6 +12,24 @@
 #include "Widgets/SOverlay.h"
 #include "Widgets/Text/STextBlock.h"
 
+UCreatureStartMenu::UCreatureStartMenu(const FObjectInitializer& ObjectInitializer)
+    : Super(ObjectInitializer)
+{
+    SurfaceTitle = INVTEXT("Surface");
+    UndergroundTitle = INVTEXT("Underground");
+    StoryText = INVTEXT("A star-nosed mole is waiting by the path. Follow the arrows to the manhole. Under the ground, you become the mole: the dark is home, and the small lives in the mud are the world you came to meet.");
+    StartLabel = INVTEXT("Start");
+    SettingsLabel = INVTEXT("Settings");
+    QuitLabel = INVTEXT("Quit");
+    ResumeLabel = INVTEXT("Back to game");
+    BackLabel = INVTEXT("Back");
+    EscHint = INVTEXT("Esc    Settings  ·  Quit");
+    UndergroundHint = INVTEXT("Underground     Esc    Settings  ·  Quit");
+    EscHelpText = INVTEXT("Settings and quit stay available while you play. Press Esc to open them again.");
+    UndergroundHelpText = INVTEXT("You are the mole now. The gravel and the insects are close. Press Esc for Settings and Quit.");
+    CardPadding = FMargin(40.0f, 36.0f);
+}
+
 void UCreatureStartMenu::SetOwnerCharacter(ACreatureCharacter* InCharacter)
 {
     OwnerCharacter = InCharacter;
@@ -63,9 +81,7 @@ TSharedRef<SWidget> UCreatureStartMenu::RebuildWidget()
     const FSlateFontInfo TitleFont = FCoreStyle::GetDefaultFontStyle("Bold", 32);
     const FSlateFontInfo BodyFont = FCoreStyle::GetDefaultFontStyle("Regular", 16);
     const FSlateFontInfo HintFont = FCoreStyle::GetDefaultFontStyle("Regular", 14);
-    const FText LevelTitle = bIncludeStart
-        ? FText::FromString(TEXT("Surface"))
-        : FText::FromString(TEXT("Underground"));
+    const FText LevelTitle = bIncludeStart ? SurfaceTitle : UndergroundTitle;
 
     StartPanel = SNew(SVerticalBox)
         .Visibility(bIncludeStart ? EVisibility::Visible : EVisibility::Collapsed)
@@ -84,7 +100,7 @@ TSharedRef<SWidget> UCreatureStartMenu::RebuildWidget()
         .Padding(8.0f, 0.0f, 8.0f, 28.0f)
         [
             SNew(STextBlock)
-            .Text(FText::FromString(TEXT("Walk with WASD and look with the mouse. Step onto the manhole when you are ready to go underground.")))
+            .Text(StoryText)
             .Font(BodyFont)
             .Justification(ETextJustify::Center)
             .AutoWrapText(true)
@@ -92,15 +108,15 @@ TSharedRef<SWidget> UCreatureStartMenu::RebuildWidget()
         ]
         + SVerticalBox::Slot().AutoHeight()
         [
-            MakeButton(TEXT("Start"), [this]() { HandleStart(); })
+            MakeButton(StartLabel.ToString(), [this]() { HandleStart(); })
         ]
         + SVerticalBox::Slot().AutoHeight()
         [
-            MakeButton(TEXT("Settings"), [this]() { ShowSettings(); })
+            MakeButton(SettingsLabel.ToString(), [this]() { ShowSettings(); })
         ]
         + SVerticalBox::Slot().AutoHeight()
         [
-            MakeButton(TEXT("Quit"), [this]() { HandleQuit(); })
+            MakeButton(QuitLabel.ToString(), [this]() { HandleQuit(); })
         ];
 
     LevelPanel = SNew(SVerticalBox)
@@ -119,7 +135,7 @@ TSharedRef<SWidget> UCreatureStartMenu::RebuildWidget()
         .Padding(8.0f, 0.0f, 8.0f, 28.0f)
         [
             SNew(STextBlock)
-            .Text(FText::FromString(TEXT("Settings and quit are available on this level.")))
+            .Text(bIncludeStart ? EscHelpText : UndergroundHelpText)
             .Font(BodyFont)
             .Justification(ETextJustify::Center)
             .AutoWrapText(true)
@@ -127,16 +143,16 @@ TSharedRef<SWidget> UCreatureStartMenu::RebuildWidget()
         ]
         + SVerticalBox::Slot().AutoHeight()
         [
-            MakeButton(TEXT("Settings"), [this]() { ShowSettings(); })
+            MakeButton(SettingsLabel.ToString(), [this]() { ShowSettings(); })
         ]
         + SVerticalBox::Slot().AutoHeight()
         [
-            MakeButton(TEXT("Quit"), [this]() { HandleQuit(); })
+            MakeButton(QuitLabel.ToString(), [this]() { HandleQuit(); })
         ]
         + SVerticalBox::Slot().AutoHeight()
         .Padding(0.0f, 8.0f, 0.0f, 0.0f)
         [
-            MakeButton(TEXT("Back to game"), [this]() { HandleResume(); })
+            MakeButton(ResumeLabel.ToString(), [this]() { HandleResume(); })
         ];
 
     SettingsPanel = SNew(SVerticalBox)
@@ -184,7 +200,7 @@ TSharedRef<SWidget> UCreatureStartMenu::RebuildWidget()
         ]
         + SVerticalBox::Slot().AutoHeight()
         [
-            MakeButton(TEXT("Back"), [this]()
+            MakeButton(BackLabel.ToString(), [this]()
             {
                 if (bReturnToStart)
                 {
@@ -201,10 +217,10 @@ TSharedRef<SWidget> UCreatureStartMenu::RebuildWidget()
         .Visibility(bIncludeStart ? EVisibility::Visible : EVisibility::Collapsed)
         .BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
         .BorderBackgroundColor(PanelColor)
-        .Padding(FMargin(40.0f, 36.0f))
+        .Padding(CardPadding)
         [
             SNew(SBox)
-            .WidthOverride(440.0f)
+            .WidthOverride(CardWidth)
             [
                 SNew(SOverlay)
                 + SOverlay::Slot()
@@ -225,13 +241,13 @@ TSharedRef<SWidget> UCreatureStartMenu::RebuildWidget()
     Hint = SNew(SBorder)
         .Visibility(bIncludeStart ? EVisibility::Collapsed : EVisibility::Visible)
         .BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-        .BorderBackgroundColor(FLinearColor(0.04f, 0.06f, 0.05f, 0.82f))
-        .Padding(FMargin(16.0f, 10.0f))
+        .BorderBackgroundColor(FLinearColor(0.08f, 0.1f, 0.08f, 0.9f))
+        .Padding(FMargin(18.0f, 12.0f))
         [
             SNew(STextBlock)
-            .Text(FText::FromString(TEXT("Esc  —  Settings and Quit")))
+            .Text(bIncludeStart ? EscHint : UndergroundHint)
             .Font(HintFont)
-            .ColorAndOpacity(FLinearColor::White)
+            .ColorAndOpacity(FLinearColor(0.96f, 0.97f, 0.94f))
         ];
 
     return SNew(SOverlay)

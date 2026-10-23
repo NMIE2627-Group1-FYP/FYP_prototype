@@ -15,7 +15,11 @@
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
+#include "BlueCubeActor.h"
+#include "ChromeSphereActor.h"
+#include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
+#include "PrototypeSceneActor.h"
 #include "Math/RotationMatrix.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -153,6 +157,52 @@ void ACreatureCharacter::BeginPlay()
     }
 
     ApplyStance();
+    HideManholePlaceholders();
+}
+
+void ACreatureCharacter::HideManholePlaceholders()
+{
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    TArray<AActor*> RemoveOnPlay;
+    for (TActorIterator<AActor> It(World); It; ++It)
+    {
+        AActor* Actor = *It;
+        if (!Actor)
+        {
+            continue;
+        }
+
+        if (Actor->IsA<ABlueCubeActor>() ||
+            Actor->IsA<AChromeSphereActor>() ||
+            Actor->IsA<APrototypeSceneActor>())
+        {
+            RemoveOnPlay.Add(Actor);
+            continue;
+        }
+
+        const bool bSurface = !World->GetMapName().Contains(TEXT("Underground"));
+        if (bSurface &&
+            (Actor->ActorHasTag(TEXT("HideInGame")) ||
+             Actor->ActorHasTag(TEXT("GuideArrow"))))
+        {
+            Actor->SetActorEnableCollision(false);
+        }
+
+        if (bSurface && Actor->ActorHasTag(TEXT("HideInGame")))
+        {
+            Actor->SetActorHiddenInGame(true);
+        }
+    }
+
+    for (AActor* Actor : RemoveOnPlay)
+    {
+        Actor->Destroy();
+    }
 }
 
 void ACreatureCharacter::ApplyStance()
@@ -281,10 +331,16 @@ void ACreatureCharacter::ShowStartMenu()
         return;
     }
 
-    StartMenu = CreateWidget<UCreatureStartMenu>(
-        PlayerController,
-        UCreatureStartMenu::StaticClass()
+    UClass* MenuClass = LoadClass<UCreatureStartMenu>(
+        nullptr,
+        TEXT("/Game/L_test/UI/WBP_StartMenu.WBP_StartMenu_C")
     );
+    if (!MenuClass)
+    {
+        MenuClass = UCreatureStartMenu::StaticClass();
+    }
+
+    StartMenu = CreateWidget<UCreatureStartMenu>(PlayerController, MenuClass);
 
     if (!StartMenu)
     {

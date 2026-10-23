@@ -44,6 +44,8 @@ protected:
 
     void ShowStartMenu();
 
+    void HideManholePlaceholders();
+
     void OpenLevelMenu();
 
     void HandleEscape();

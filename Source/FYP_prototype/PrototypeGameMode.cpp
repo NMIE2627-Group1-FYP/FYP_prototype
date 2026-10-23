@@ -1,7 +1,6 @@
 #include "PrototypeGameMode.h"
 
 #include "CreatureCharacter.h"
-#include "PrototypeSceneActor.h"
 
 APrototypeGameMode::APrototypeGameMode()
 {
@@ -12,18 +11,4 @@ APrototypeGameMode::APrototypeGameMode()
 void APrototypeGameMode::BeginPlay()
 {
     Super::BeginPlay();
-
-    if (GetWorld())
-    {
-        FActorSpawnParameters SpawnParams;
-        SpawnParams.SpawnCollisionHandlingOverride =
-            ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-        GetWorld()->SpawnActor<APrototypeSceneActor>(
-            APrototypeSceneActor::StaticClass(),
-            FVector::ZeroVector,
-            FRotator::ZeroRotator,
-            SpawnParams
-        );
-    }
 }
