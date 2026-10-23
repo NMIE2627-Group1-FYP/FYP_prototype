@@ -7,16 +7,18 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "Engine/LocalPlayer.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
+#include "Kismet/GameplayStatics.h"
 #include "Math/RotationMatrix.h"
 #include "UObject/ConstructorHelpers.h"
 
 // Sets default values
 ACreatureCharacter::ACreatureCharacter()
 {
-    PrimaryActorTick.bCanEverTick = false;
+    PrimaryActorTick.bCanEverTick = true;
 
     // Body yaws with the controller. Pitch stays on the camera.
     bUseControllerRotationYaw = true;
@@ -26,8 +28,10 @@ ACreatureCharacter::ACreatureCharacter()
     // Strafe in the look direction instead of turning toward velocity.
     GetCharacterMovement()->bOrientRotationToMovement = false;
 
-    // Initial test speed.
-    GetCharacterMovement()->MaxWalkSpeed = 300.0f;
+    // Surface pace is a walking speed. ApplyStance retunes this per level.
+    GetCharacterMovement()->MaxWalkSpeed = 450.0f;
+    GetCharacterMovement()->MaxAcceleration = 800.0f;
+    GetCharacterMovement()->BrakingDecelerationWalking = 1400.0f;
 
     // Content defaults. The Blueprint can still override these.
     static ConstructorHelpers::FObjectFinder<UInputMappingContext> MappingContextAsset(
@@ -130,7 +134,7 @@ void ACreatureCharacter::BeginPlay()
             TEXT("FirstPersonCamera")
         );
         Camera->SetupAttachment(GetCapsuleComponent());
-        Camera->SetRelativeLocation(FVector(0.0f, 0.0f, 64.0f));
+        Camera->SetRelativeLocation(FVector(0.0f, 0.0f, 72.0f));
         Camera->bUsePawnControlRotation = true;
         Camera->RegisterComponent();
         Cameras.Add(Camera);
@@ -142,6 +146,80 @@ void ACreatureCharacter::BeginPlay()
         {
             Camera->bUsePawnControlRotation = true;
         }
+    }
+
+    ApplyStance();
+}
+
+void ACreatureCharacter::ApplyStance()
+{
+    UWorld* World = GetWorld();
+    const bool bMole =
+        World && World->GetMapName().Contains(TEXT("Underground"));
+
+    const float CapsuleRadius = bMole ? 20.0f : 34.0f;
+    const float CapsuleHalfHeight = bMole ? 26.0f : 88.0f;
+    // Eye height above the ground: half height plus the camera offset.
+    const float CameraHeight = bMole ? 6.0f : 72.0f;
+    const float WalkSpeed = bMole ? 150.0f : 450.0f;
+
+    GetCapsuleComponent()->SetCapsuleSize(CapsuleRadius, CapsuleHalfHeight, true);
+
+    UCharacterMovementComponent* Movement = GetCharacterMovement();
+    Movement->MaxWalkSpeed = WalkSpeed;
+    Movement->MaxAcceleration = bMole ? 350.0f : 800.0f;
+    Movement->BrakingDecelerationWalking = bMole ? 900.0f : 1400.0f;
+    Movement->JumpZVelocity = bMole ? 180.0f : 420.0f;
+
+    TArray<UCameraComponent*> Cameras;
+    GetComponents<UCameraComponent>(Cameras);
+    for (UCameraComponent* Camera : Cameras)
+    {
+        if (Camera)
+        {
+            Camera->SetRelativeLocation(FVector(0.0f, 0.0f, CameraHeight));
+        }
+    }
+
+    const float BodyScale = bMole ? (CapsuleHalfHeight / 88.0f) : 1.0f;
+    TArray<USkeletalMeshComponent*> BodyMeshes;
+    GetComponents<USkeletalMeshComponent>(BodyMeshes);
+    for (USkeletalMeshComponent* BodyMesh : BodyMeshes)
+    {
+        if (!BodyMesh)
+        {
+            continue;
+        }
+
+        BodyMesh->SetRelativeScale3D(FVector(BodyScale));
+        BodyMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -CapsuleHalfHeight));
+    }
+}
+
+void ACreatureCharacter::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+
+    if (bBurrowTransitionStarted)
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World || World->GetMapName().Contains(TEXT("Underground")))
+    {
+        return;
+    }
+
+    const FVector Location = GetActorLocation();
+    const float DistanceFromManhole = FVector2D(Location.X, Location.Y).Size();
+    if (Location.Z < -120.0f && DistanceFromManhole < 500.0f)
+    {
+        bBurrowTransitionStarted = true;
+        UGameplayStatics::OpenLevel(
+            this,
+            FName(TEXT("/Game/L_test/Underground"))
+        );
     }
 }
 

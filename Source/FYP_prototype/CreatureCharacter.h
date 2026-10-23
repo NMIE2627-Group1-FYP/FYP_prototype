@@ -19,6 +19,8 @@ public:
 protected:
     virtual void BeginPlay() override;
 
+    virtual void Tick(float DeltaSeconds) override;
+
     virtual void PawnClientRestart() override;
 
     virtual void SetupPlayerInputComponent(
@@ -28,6 +30,10 @@ protected:
     void ResolveInputAssets();
 
     void AddDefaultMappingContext();
+
+    void ApplyStance();
+
+    bool bBurrowTransitionStarted = false;
 
     UPROPERTY(
         EditDefaultsOnly,
