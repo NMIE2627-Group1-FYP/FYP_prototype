@@ -46,6 +46,8 @@ protected:
 
     void HideManholePlaceholders();
 
+    void UpdateGrassResponse();
+
     void OpenLevelMenu();
 
     void HandleEscape();

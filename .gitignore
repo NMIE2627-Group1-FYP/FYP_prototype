@@ -1,3 +1,4 @@
+# Unreal generated and local files
 Binaries/
 DerivedDataCache/
 Intermediate/
@@ -6,6 +7,8 @@ Build/
 .vs/
 .vscode/
 .idea/
+
+# Visual Studio and build artifacts
 *.VC.db
 *.opensdf
 *.sdf
@@ -25,3 +28,10 @@ enc_temp_folder/
 *.tmp
 *.log
 .cursorignore
+
+# Local agent and tool folders
+.cursor/
+.gemini/
+.codex/
+.mcp.json
+**/.mcp.json

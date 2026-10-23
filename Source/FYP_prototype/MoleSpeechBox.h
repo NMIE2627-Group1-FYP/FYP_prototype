@@ -19,7 +19,16 @@ public:
     void ShowLine(int32 LineIndex);
 
     UFUNCTION(BlueprintCallable, Category = "Dialogue")
+    void SetLines(const TArray<FString>& InLines);
+
+    UFUNCTION(BlueprintCallable, Category = "Dialogue")
     void SetSpeech(const FString& InSpeech);
+
+    UFUNCTION(BlueprintCallable, Category = "Dialogue")
+    void Advance();
+
+    UFUNCTION(BlueprintCallable, Category = "Dialogue")
+    void SetWalkProgress(float Amount);
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
     FText SpeakerName;
@@ -28,17 +37,23 @@ public:
     TArray<FText> Lines;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
-    FText NextLabel;
+    FText WalkHint;
 
 protected:
     virtual TSharedRef<SWidget> RebuildWidget() override;
 
 private:
-    void HandleNext();
-
     void Refresh();
+
+    void HandleAdvance();
 
     int32 CurrentLine = 0;
 
+    float WalkProgress = 0.0f;
+
     TSharedPtr<STextBlock> BodyText;
+
+    TSharedPtr<STextBlock> HintText;
+
+    TSharedPtr<SBox> ProgressFill;
 };

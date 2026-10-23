@@ -15,7 +15,13 @@ public:
     AMoleNpc();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue", meta = (MultiLine = true))
-    FString SpeechText;
+    TArray<FString> Lines;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue", meta = (ClampMin = "20.0"))
+    float StepDistance = 90.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dialogue")
+    FText WalkHint;
 
 protected:
     virtual void BeginPlay() override;
@@ -29,4 +35,10 @@ private:
     TObjectPtr<UMoleSpeechBox> SpeechBox;
 
     void FaceCamera();
+
+    void AdvanceDialogue();
+
+    FVector StepOrigin = FVector::ZeroVector;
+
+    bool bHasStepOrigin = false;
 };

@@ -19,6 +19,8 @@
 #include "ChromeSphereActor.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMaterialLibrary.h"
+#include "Materials/MaterialParameterCollection.h"
 #include "PrototypeSceneActor.h"
 #include "Math/RotationMatrix.h"
 #include "UObject/ConstructorHelpers.h"
@@ -285,6 +287,8 @@ void ACreatureCharacter::Tick(float DeltaSeconds)
         return;
     }
 
+    UpdateGrassResponse();
+
     const FVector Location = GetActorLocation();
     const float DistanceFromManhole = FVector2D(Location.X, Location.Y).Size();
     const bool bStandingOnManhole =
@@ -368,6 +372,30 @@ void ACreatureCharacter::ShowStartMenu()
     PlayerController->SetPause(true);
 
     UE_LOG(LogTemp, Log, TEXT("Start menu open. Choose Start, Settings, or Quit."));
+}
+
+void ACreatureCharacter::UpdateGrassResponse()
+{
+    UMaterialParameterCollection* Collection = LoadObject<UMaterialParameterCollection>(
+        nullptr,
+        TEXT("/Game/L_test/Materials/MPC_Player.MPC_Player")
+    );
+    if (!Collection)
+    {
+        return;
+    }
+
+    const FVector Velocity = GetVelocity();
+    const FVector FlatVelocity(Velocity.X, Velocity.Y, 0.0f);
+    const float Amount = FMath::Clamp(FlatVelocity.Size() / 500.0f, 0.0f, 1.0f);
+    const FVector Direction = FlatVelocity.GetSafeNormal();
+    const FVector Location = GetActorLocation();
+
+    UKismetMaterialLibrary::SetVectorParameterValue(
+        this, Collection, TEXT("PlayerPosition"), FLinearColor(Location.X, Location.Y, Location.Z, 1.0f));
+    UKismetMaterialLibrary::SetVectorParameterValue(
+        this, Collection, TEXT("MoveDirection"), FLinearColor(Direction.X, Direction.Y, 0.0f, 0.0f));
+    UKismetMaterialLibrary::SetScalarParameterValue(this, Collection, TEXT("MoveAmount"), Amount);
 }
 
 void ACreatureCharacter::DismissStartMenu()

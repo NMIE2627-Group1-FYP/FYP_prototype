@@ -1,7 +1,7 @@
 #include "MoleSpeechBox.h"
 
+#include "HAL/PlatformTime.h"
 #include "Styling/CoreStyle.h"
-#include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SBoxPanel.h"
@@ -12,11 +12,13 @@ UMoleSpeechBox::UMoleSpeechBox(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
 {
     SpeakerName = INVTEXT("Star-nosed mole");
-    NextLabel = INVTEXT("Next");
+    WalkHint = INVTEXT("Walk to hear the next line");
     Lines = {
-        INVTEXT("You made it below. From here, you are me."),
-        INVTEXT("The dark is not empty. The mud, the insects, and the quiet are the story."),
-        INVTEXT("Watch how each insect moves in its own way. That is how you learn this place."),
+        INVTEXT("You wake in the dark with an empty, aching stomach."),
+        INVTEXT("The den's food store is bare."),
+        INVTEXT("Behind you there is faint squeaking and slow breathing. The family depends on you."),
+        INVTEXT("The floor hums under your feet. Find direction by hearing, and judge the ground by stepping."),
+        INVTEXT("There is one purpose: find food and bring it home."),
     };
 }
 
@@ -29,6 +31,20 @@ TSharedRef<SWidget> UMoleSpeechBox::RebuildWidget()
         .Font(BodyFont)
         .AutoWrapText(true)
         .ColorAndOpacity(FLinearColor(0.93f, 0.95f, 0.9f));
+
+    SAssignNew(HintText, STextBlock)
+        .Text(WalkHint)
+        .Font(FCoreStyle::GetDefaultFontStyle("Bold", 13))
+        .ColorAndOpacity(FLinearColor(0.82f, 0.68f, 0.32f));
+
+    SAssignNew(ProgressFill, SBox)
+        .WidthOverride(8.0f)
+        .HeightOverride(8.0f)
+        [
+            SNew(SBorder)
+            .BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+            .BorderBackgroundColor(FLinearColor(0.82f, 0.68f, 0.32f, 0.95f))
+        ];
 
     Refresh();
 
@@ -52,31 +68,33 @@ TSharedRef<SWidget> UMoleSpeechBox::RebuildWidget()
                 ]
                 + SVerticalBox::Slot()
                 .AutoHeight()
-                .Padding(0.0f, 0.0f, 0.0f, 14.0f)
+                .Padding(0.0f, 0.0f, 0.0f, 12.0f)
                 [
                     BodyText.ToSharedRef()
                 ]
                 + SVerticalBox::Slot()
                 .AutoHeight()
-                .HAlign(HAlign_Right)
+                .Padding(0.0f, 0.0f, 0.0f, 8.0f)
+                [
+                    HintText.ToSharedRef()
+                ]
+                + SVerticalBox::Slot()
+                .AutoHeight()
                 [
                     SNew(SBox)
-                    .WidthOverride(140.0f)
-                    .HeightOverride(40.0f)
+                    .HeightOverride(8.0f)
                     [
-                        SNew(SButton)
-                        .ButtonStyle(&FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("Button"))
-                        .HAlign(HAlign_Center)
-                        .VAlign(VAlign_Center)
-                        .OnClicked_Lambda([this]()
-                        {
-                            HandleNext();
-                            return FReply::Handled();
-                        })
+                        SNew(SOverlay)
+                        + SOverlay::Slot()
                         [
-                            SNew(STextBlock)
-                            .Text(NextLabel)
-                            .Justification(ETextJustify::Center)
+                            SNew(SBorder)
+                            .BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+                            .BorderBackgroundColor(FLinearColor(0.16f, 0.16f, 0.14f, 0.85f))
+                        ]
+                        + SOverlay::Slot()
+                        .HAlign(HAlign_Left)
+                        [
+                            ProgressFill.ToSharedRef()
                         ]
                     ]
                 ]
@@ -93,15 +111,46 @@ TSharedRef<SWidget> UMoleSpeechBox::RebuildWidget()
         ];
 }
 
-void UMoleSpeechBox::SetSpeech(const FString& InSpeech)
+void UMoleSpeechBox::SetLines(const TArray<FString>& InLines)
 {
     Lines.Reset();
-    if (!InSpeech.IsEmpty())
+    for (const FString& Line : InLines)
     {
-        Lines.Add(FText::FromString(InSpeech));
+        if (!Line.IsEmpty())
+        {
+            Lines.Add(FText::FromString(Line));
+        }
     }
     CurrentLine = 0;
     Refresh();
+}
+
+void UMoleSpeechBox::SetSpeech(const FString& InSpeech)
+{
+    TArray<FString> AsLines;
+    AsLines.Add(InSpeech);
+    SetLines(AsLines);
+}
+
+void UMoleSpeechBox::Advance()
+{
+    HandleAdvance();
+}
+
+void UMoleSpeechBox::SetWalkProgress(float Amount)
+{
+    WalkProgress = FMath::Clamp(Amount, 0.0f, 1.0f);
+    if (ProgressFill.IsValid())
+    {
+        ProgressFill->SetWidthOverride(FMath::Lerp(8.0f, 596.0f, WalkProgress));
+    }
+
+    if (HintText.IsValid())
+    {
+        const float Pulse = 0.55f + 0.45f * FMath::Abs(FMath::Sin(FPlatformTime::Seconds() * 3.2f));
+        HintText->SetColorAndOpacity(FLinearColor(0.82f, 0.68f, 0.32f, Pulse));
+        HintText->SetText(WalkHint);
+    }
 }
 
 void UMoleSpeechBox::ShowLine(int32 LineIndex)
@@ -110,7 +159,7 @@ void UMoleSpeechBox::ShowLine(int32 LineIndex)
     Refresh();
 }
 
-void UMoleSpeechBox::HandleNext()
+void UMoleSpeechBox::HandleAdvance()
 {
     if (Lines.Num() == 0)
     {
@@ -138,5 +187,10 @@ void UMoleSpeechBox::Refresh()
     if (Lines.IsValidIndex(CurrentLine))
     {
         BodyText->SetText(Lines[CurrentLine]);
+    }
+
+    if (HintText.IsValid())
+    {
+        HintText->SetText(WalkHint);
     }
 }

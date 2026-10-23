@@ -13,7 +13,14 @@ AMoleNpc::AMoleNpc()
     SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
     SetRootComponent(SceneRoot);
 
-    SpeechText = TEXT("You made it below. From here, you are me.");
+    Lines = {
+        TEXT("You wake in the dark with an empty, aching stomach."),
+        TEXT("The den's food store is bare."),
+        TEXT("Behind you there is faint squeaking and slow breathing. The family depends on you."),
+        TEXT("The floor hums under your feet. Find direction by hearing, and judge the ground by stepping."),
+        TEXT("There is one purpose: find food and bring it home."),
+    };
+    WalkHint = INVTEXT("Walk to hear the next line");
 }
 
 void AMoleNpc::BeginPlay()
@@ -47,7 +54,9 @@ void AMoleNpc::BeginPlay()
         return;
     }
 
-    SpeechBox->SetSpeech(SpeechText);
+    SpeechBox->SetLines(Lines);
+    SpeechBox->WalkHint = WalkHint;
+    SpeechBox->SetWalkProgress(0.0f);
     SpeechBox->AddToViewport(20);
 }
 
@@ -55,6 +64,42 @@ void AMoleNpc::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     FaceCamera();
+    AdvanceDialogue();
+}
+
+void AMoleNpc::AdvanceDialogue()
+{
+    if (!SpeechBox)
+    {
+        return;
+    }
+
+    APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
+    if (!Player)
+    {
+        return;
+    }
+
+    const FVector Location = Player->GetActorLocation();
+    if (!bHasStepOrigin)
+    {
+        StepOrigin = Location;
+        bHasStepOrigin = true;
+        SpeechBox->SetWalkProgress(0.0f);
+        return;
+    }
+
+    const float Travelled = FVector::Dist2D(Location, StepOrigin);
+    const float Needed = FMath::Max(StepDistance, 1.0f);
+    SpeechBox->SetWalkProgress(Travelled / Needed);
+    if (Travelled < Needed)
+    {
+        return;
+    }
+
+    StepOrigin = Location;
+    SpeechBox->SetWalkProgress(0.0f);
+    SpeechBox->Advance();
 }
 
 void AMoleNpc::FaceCamera()
