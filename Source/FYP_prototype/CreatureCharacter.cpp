@@ -1,16 +1,20 @@
 #include "CreatureCharacter.h"
 
+#include "CreatureStartMenu.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "Blueprint/UserWidget.h"
+#include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
+#include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Math/RotationMatrix.h"
 #include "UObject/ConstructorHelpers.h"
@@ -194,6 +198,21 @@ void ACreatureCharacter::ApplyStance()
         BodyMesh->SetRelativeScale3D(FVector(BodyScale));
         BodyMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -CapsuleHalfHeight));
     }
+
+    if (bMole)
+    {
+        UE_LOG(LogTemp, Log, TEXT("Entered the underground level."));
+
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(
+                2,
+                6.0f,
+                FColor::White,
+                TEXT("Entered the underground level.")
+            );
+        }
+    }
 }
 
 void ACreatureCharacter::Tick(float DeltaSeconds)
@@ -211,16 +230,175 @@ void ACreatureCharacter::Tick(float DeltaSeconds)
         return;
     }
 
+    if (bAwaitingStart)
+    {
+        return;
+    }
+
     const FVector Location = GetActorLocation();
     const float DistanceFromManhole = FVector2D(Location.X, Location.Y).Size();
-    if (Location.Z < -120.0f && DistanceFromManhole < 500.0f)
+    const bool bStandingOnManhole =
+        DistanceFromManhole < 260.0f && Location.Z > -40.0f && Location.Z < 280.0f;
+
+    if (bStandingOnManhole)
     {
         bBurrowTransitionStarted = true;
+        UE_LOG(LogTemp, Log, TEXT("Entering the underground level from the manhole."));
+
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(
+                2,
+                4.0f,
+                FColor::White,
+                TEXT("Entering the underground level.")
+            );
+        }
+
         UGameplayStatics::OpenLevel(
             this,
             FName(TEXT("/Game/L_test/Underground"))
         );
     }
+}
+
+void ACreatureCharacter::ShowStartMenu()
+{
+    if (bStartMenuShown)
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    APlayerController* PlayerController = Cast<APlayerController>(GetController());
+    if (!PlayerController || !PlayerController->IsLocalController())
+    {
+        return;
+    }
+
+    StartMenu = CreateWidget<UCreatureStartMenu>(
+        PlayerController,
+        UCreatureStartMenu::StaticClass()
+    );
+
+    if (!StartMenu)
+    {
+        return;
+    }
+
+    const bool bUnderground = World->GetMapName().Contains(TEXT("Underground"));
+    bStartMenuShown = true;
+    bAwaitingStart = !bUnderground;
+    StartMenu->SetOwnerCharacter(this);
+    StartMenu->SetIncludeStart(!bUnderground);
+    StartMenu->AddToViewport(10);
+
+    if (bUnderground)
+    {
+        StartMenu->ShowPlaying();
+        return;
+    }
+
+    FInputModeUIOnly InputMode;
+    InputMode.SetWidgetToFocus(StartMenu->TakeWidget());
+    InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+    PlayerController->SetInputMode(InputMode);
+    PlayerController->SetShowMouseCursor(true);
+    PlayerController->SetPause(true);
+
+    UE_LOG(LogTemp, Log, TEXT("Start menu open. Choose Start, Settings, or Quit."));
+}
+
+void ACreatureCharacter::DismissStartMenu()
+{
+    bAwaitingStart = false;
+
+    if (StartMenu)
+    {
+        StartMenu->ShowPlaying();
+    }
+
+    CloseLevelMenu();
+
+    UE_LOG(LogTemp, Log, TEXT("Game started."));
+
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(
+            1,
+            4.0f,
+            FColor::White,
+            TEXT("Game started.")
+        );
+    }
+}
+
+void ACreatureCharacter::OpenLevelMenu()
+{
+    if (bAwaitingStart || !StartMenu)
+    {
+        return;
+    }
+
+    StartMenu->ShowLevelCard();
+
+    if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+    {
+        FInputModeGameAndUI InputMode;
+        InputMode.SetWidgetToFocus(StartMenu->TakeWidget());
+        InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+        InputMode.SetHideCursorDuringCapture(false);
+        PlayerController->SetInputMode(InputMode);
+        PlayerController->SetShowMouseCursor(true);
+        PlayerController->SetPause(true);
+    }
+}
+
+void ACreatureCharacter::CloseLevelMenu()
+{
+    if (StartMenu)
+    {
+        StartMenu->ShowPlaying();
+    }
+
+    if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+    {
+        PlayerController->SetPause(false);
+        PlayerController->SetInputMode(FInputModeGameOnly());
+        PlayerController->SetShowMouseCursor(false);
+    }
+}
+
+void ACreatureCharacter::HandleEscape()
+{
+    if (bAwaitingStart || !StartMenu)
+    {
+        return;
+    }
+
+    if (StartMenu->IsCardOpen())
+    {
+        CloseLevelMenu();
+    }
+    else
+    {
+        OpenLevelMenu();
+    }
+}
+
+void ACreatureCharacter::SetLookSensitivity(float NewSensitivity)
+{
+    MouseSensitivity = FMath::Clamp(NewSensitivity, 0.2f, 3.0f);
+}
+
+float ACreatureCharacter::GetLookSensitivity() const
+{
+    return MouseSensitivity;
 }
 
 void ACreatureCharacter::PawnClientRestart()
@@ -229,6 +407,7 @@ void ACreatureCharacter::PawnClientRestart()
 
     // Runs after this pawn is possessed by the local player.
     AddDefaultMappingContext();
+    ShowStartMenu();
 }
 
 // Called to bind functionality to input
@@ -237,6 +416,13 @@ void ACreatureCharacter::SetupPlayerInputComponent(
 )
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+    PlayerInputComponent->BindKey(
+        EKeys::Escape,
+        IE_Pressed,
+        this,
+        &ACreatureCharacter::HandleEscape
+    );
 
     ResolveInputAssets();
     AddDefaultMappingContext();

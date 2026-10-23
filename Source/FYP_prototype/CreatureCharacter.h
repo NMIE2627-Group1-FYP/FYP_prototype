@@ -4,6 +4,7 @@
 #include "GameFramework/Character.h"
 #include "CreatureCharacter.generated.h"
 
+class UCreatureStartMenu;
 class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
@@ -15,6 +16,14 @@ class FYP_PROTOTYPE_API ACreatureCharacter : public ACharacter
 
 public:
     ACreatureCharacter();
+
+    void DismissStartMenu();
+
+    void CloseLevelMenu();
+
+    void SetLookSensitivity(float NewSensitivity);
+
+    float GetLookSensitivity() const;
 
 protected:
     virtual void BeginPlay() override;
@@ -33,7 +42,20 @@ protected:
 
     void ApplyStance();
 
+    void ShowStartMenu();
+
+    void OpenLevelMenu();
+
+    void HandleEscape();
+
     bool bBurrowTransitionStarted = false;
+
+    bool bStartMenuShown = false;
+
+    bool bAwaitingStart = false;
+
+    UPROPERTY()
+    TObjectPtr<UCreatureStartMenu> StartMenu;
 
     UPROPERTY(
         EditDefaultsOnly,
