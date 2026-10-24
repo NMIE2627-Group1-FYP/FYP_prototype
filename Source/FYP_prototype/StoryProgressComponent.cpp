@@ -2,6 +2,9 @@
 
 #include "CaveContrastComponent.h"
 #include "CaveUserWidget.h"
+#include "Components/PointLightComponent.h"
+#include "Engine/PointLight.h"
+#include "MoleNpc.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/SkyLightComponent.h"
@@ -12,6 +15,7 @@
 #include "Engine/SkyLight.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/PackageName.h"
 #include "StoryLineRow.h"
@@ -20,6 +24,13 @@
 UStoryProgressComponent::UStoryProgressComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	DialogLines = {
+		NSLOCTEXT("Story", "Line1", "You wake in the dark with an empty, aching stomach."),
+		NSLOCTEXT("Story", "Line2", "The den's food store is bare."),
+		NSLOCTEXT("Story", "Line3", "Behind you there is faint squeaking and slow breathing. The family depends on you."),
+		NSLOCTEXT("Story", "Line4", "The floor hums under your feet. Find direction by hearing, and judge the ground by stepping."),
+		NSLOCTEXT("Story", "Line5", "There is one purpose: find food and bring it home."),
+	};
 }
 
 void UStoryProgressComponent::BeginPlay()
@@ -39,7 +50,14 @@ void UStoryProgressComponent::BeginPlay()
 
 	LineTexts.Reset();
 	RowThresholds.Reset();
-	if (Lines)
+	for (const FText& Line : DialogLines)
+	{
+		if (!Line.IsEmpty())
+		{
+			LineTexts.Add(Line.ToString());
+		}
+	}
+	if (LineTexts.IsEmpty() && Lines)
 	{
 		for (const FName& RowName : Lines->GetRowNames())
 		{
@@ -143,13 +161,13 @@ void UStoryProgressComponent::ApplyDarkStart()
 		}
 
 		float Intensity = 1.0f;
-		SkyActor->SetActorHiddenInGame(true);
 		if (USkyLightComponent* Sky = SkyActor->GetLightComponent())
 		{
 			Intensity = Sky->Intensity;
-			Sky->SetIntensity(0.0f);
-			Sky->SetVisibility(false);
+			Sky->SetVisibility(true);
+			Sky->SetIntensity(FMath::Max(Intensity * 0.12f, 0.2f));
 		}
+		SkyActor->SetActorHiddenInGame(false);
 		SkyLights.Add(SkyActor);
 		SkyIntensities.Add(Intensity);
 	}
@@ -203,7 +221,8 @@ void UStoryProgressComponent::RestoreAtmosphere()
 		if (USkyLightComponent* Sky = SkyActor->GetLightComponent())
 		{
 			Sky->SetVisibility(true);
-			Sky->SetIntensity(SkyIntensities.IsValidIndex(Index) ? SkyIntensities[Index] : 1.0f);
+			const float Saved = SkyIntensities.IsValidIndex(Index) ? SkyIntensities[Index] : 1.0f;
+			Sky->SetIntensity(FMath::Max(Saved * 0.12f, 0.2f));
 		}
 	}
 
@@ -220,17 +239,11 @@ void UStoryProgressComponent::RestoreAtmosphere()
 		{
 			Component->SetVisibility(true);
 			const float Density = FogDensities.IsValidIndex(Index) ? FogDensities[Index] : 0.02f;
-			Component->SetFogDensity(Density);
+			Component->SetFogDensity(Density * 0.35f);
 		}
 	}
 
-	for (APostProcessVolume* Volume : Volumes)
-	{
-		if (Volume)
-		{
-			Volume->bEnabled = true;
-		}
-	}
+	// The burrow post-process was the line filter. It stays off so the dark read comes from the lights.
 }
 
 void UStoryProgressComponent::NotifyContrast(float Progress, bool bComplete) const
@@ -258,36 +271,38 @@ void UStoryProgressComponent::SampleDistance()
 {
 	const AActor* Owner = GetOwner();
 	const UWorld* World = GetWorld();
-	if (!Owner || !World || bStoryFinished)
+	if (!Owner || !World)
 	{
 		return;
 	}
 
-	const FVector Location = Owner->GetActorLocation();
-	if (!bHasSample)
-	{
-		LastLocation = Location;
-		bHasSample = true;
-		return;
-	}
-
-	AccumulatedDistance += FVector::Dist2D(Location, LastLocation);
-	LastLocation = Location;
-
-	if (!LineTexts.IsValidIndex(NextLine) || AccumulatedDistance < ThresholdForLine(NextLine))
+	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
+	const bool bForwardDown = PlayerController && (
+		PlayerController->IsInputKeyDown(EKeys::W) ||
+		PlayerController->IsInputKeyDown(EKeys::Up));
+	const bool bPressed = bForwardDown && !bForwardHeld;
+	bForwardHeld = bForwardDown;
+	if (!bPressed)
 	{
 		return;
 	}
 
-	const float Now = World->GetTimeSeconds();
-	if (NextLine > 0 && Now - LastRevealTime < MinLineSeconds)
+	if (bStoryFinished)
+	{
+		if (Dialogue && !bDialogueDismissed)
+		{
+			Dialogue->RemoveFromParent();
+			Dialogue = nullptr;
+			bDialogueDismissed = true;
+		}
+		return;
+	}
+
+	if (!LineTexts.IsValidIndex(NextLine))
 	{
 		return;
 	}
 
-	// Walking far ahead while a line is still on screen must not bank several lines at once.
-	AccumulatedDistance = FMath::Min(AccumulatedDistance, ThresholdForLine(NextLine) + LineStepDistance * 0.5f);
-	LastRevealTime = Now;
 	RevealLine(NextLine++);
 }
 
@@ -312,12 +327,26 @@ void UStoryProgressComponent::RevealLine(int32 LineIndex)
 	}
 
 	const bool bFinal = LineIndex == LineTexts.Num() - 1;
+	if (UWorld* World = GetWorld())
+	{
+		AMoleNpc* Mole = nullptr;
+		for (TActorIterator<AMoleNpc> It(World); It; ++It)
+		{
+			Mole = *It;
+			break;
+		}
+		if (!Mole)
+		{
+			Mole = World->SpawnActor<AMoleNpc>(AMoleNpc::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator);
+		}
+		if (Mole && LineTexts.IsValidIndex(LineIndex))
+		{
+			Mole->PresentLine(LineTexts[LineIndex], bFinal);
+		}
+	}
+
 	if (Dialogue && LineTexts.IsValidIndex(LineIndex))
 	{
-		if (bFinal)
-		{
-			Dialogue->ShowFinale();
-		}
 		Dialogue->SetSpeech(LineTexts[LineIndex]);
 	}
 
@@ -414,22 +443,76 @@ void UStoryProgressComponent::TickLightFades()
 	}
 }
 
+void UStoryProgressComponent::DismissDialogue()
+{
+	if (Dialogue)
+	{
+		Dialogue->RemoveFromParent();
+		Dialogue = nullptr;
+	}
+	bDialogueDismissed = true;
+}
+
 void UStoryProgressComponent::FinishStory()
 {
 	bStoryFinished = true;
+
+	ALight* Above = nullptr;
+	float Highest = -100000.0f;
+	auto Consider = [&Above, &Highest](ALight* Light)
+	{
+		if (Light && Light->GetActorLocation().Z > Highest)
+		{
+			Highest = Light->GetActorLocation().Z;
+			Above = Light;
+		}
+	};
+	for (ALight* Light : StoryLights)
+	{
+		Consider(Light);
+	}
+	for (ALight* Light : AmbientLights)
+	{
+		Consider(Light);
+	}
+
 	for (int32 Index = 0; Index < StoryLights.Num(); ++Index)
 	{
+		const bool bKeep = StoryLights[Index] == Above;
 		const float Full = TargetIntensity.IsValidIndex(Index) ? TargetIntensity[Index] : 0.0f;
-		StartLightFade(StoryLights[Index], Full);
+		StartLightFade(StoryLights[Index], bKeep ? FMath::Max(Full * 0.15f, 80.0f) : 0.0f);
 	}
 	for (int32 Index = 0; Index < AmbientLights.Num(); ++Index)
 	{
+		const bool bKeep = AmbientLights[Index] == Above;
 		const float Full = AmbientTargets.IsValidIndex(Index) ? AmbientTargets[Index] : 0.0f;
-		StartLightFade(AmbientLights[Index], Full);
+		StartLightFade(AmbientLights[Index], bKeep ? FMath::Max(Full * 0.15f, 80.0f) : 0.0f);
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
+		const FVector Origin = Player ? Player->GetActorLocation() : FVector::ZeroVector;
+		if (APointLight* Below = World->SpawnActor<APointLight>(Origin + FVector(0.0f, 0.0f, -70.0f), FRotator::ZeroRotator))
+		{
+			if (UPointLightComponent* Bulb = Cast<UPointLightComponent>(Below->GetLightComponent()))
+			{
+				Bulb->SetIntensity(70.0f);
+				Bulb->SetAttenuationRadius(900.0f);
+				Bulb->SetLightColor(FLinearColor(0.35f, 0.42f, 0.55f));
+				Bulb->SetCastShadows(false);
+			}
+		}
 	}
 
 	RestoreAtmosphere();
 	NotifyContrast(1.0f, true);
+
+	if (UWorld* DialogueWorld = GetWorld())
+	{
+		DialogueWorld->GetTimerManager().SetTimer(
+			DismissTimer, this, &UStoryProgressComponent::DismissDialogue, 2.5f, false);
+	}
 
 	if (UWorld* World = GetWorld())
 	{

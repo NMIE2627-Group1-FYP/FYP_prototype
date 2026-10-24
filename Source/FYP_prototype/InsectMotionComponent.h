@@ -57,7 +57,7 @@ public:
 	EInsectActivity Activity = EInsectActivity::Cruise;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Insect|Surround")
-	bool bSurroundPlayer = true;
+	bool bSurroundPlayer = false;
 
 	/** Distance from the player to this species' slot. 0 picks a per-species default. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Insect|Surround", meta = (ClampMin = "0.0"))

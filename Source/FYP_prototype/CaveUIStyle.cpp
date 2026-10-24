@@ -1,8 +1,10 @@
 #include "CaveUIStyle.h"
 
 #include "Engine/Font.h"
+#include "Engine/FontFace.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "Styling/SlateBrush.h"
 
 const TCHAR* UCaveUIStyle::AssetPath = TEXT("/Game/GameProject/UI/DA_CaveSlateStyle.DA_CaveSlateStyle");
@@ -21,7 +23,7 @@ namespace CaveUIStylePrivate
 	{
 		FSlateFontInfo Font;
 		Font.Size = Size;
-		Font.TypefaceFontName = TEXT("Regular");
+		Font.TypefaceFontName = TEXT("Fredoka");
 		Font.OutlineSettings.OutlineSize = 1;
 		Font.OutlineSettings.OutlineColor = FLinearColor::Black;
 		Font.OutlineSettings.bApplyOutlineToDropShadows = true;
@@ -53,20 +55,39 @@ UCaveUIStyle::UCaveUIStyle()
 	HoverTint = FLinearColor(1.35f, 1.28f, 1.08f, 1.0f);
 }
 
+namespace
+{
+	UFont* MakeFredoka(UObject* Outer)
+	{
+		const FString FontFile = FPaths::ProjectContentDir() / TEXT("GameProject/UI/Fonts/Fredoka-Regular.ttf");
+		UFont* Font = NewObject<UFont>(Outer ? Outer : GetTransientPackage());
+		Font->FontCacheType = EFontCacheType::Runtime;
+		UFontFace* Face = NewObject<UFontFace>(Font);
+		Face->SourceFilename = FontFile;
+		Face->Hinting = EFontHinting::Auto;
+		Face->LoadingPolicy = EFontLoadingPolicy::LazyLoad;
+		FTypefaceEntry& Entry = Font->GetMutableInternalCompositeFont().DefaultTypeface.Fonts.AddDefaulted_GetRef();
+		Entry.Name = TEXT("Fredoka");
+		Entry.Font = FFontData(Face);
+		return Font;
+	}
+}
+
 UCaveUIStyle* UCaveUIStyle::Load(UObject* Outer)
 {
+	UCaveUIStyle* Style = nullptr;
 	if (FPackageName::DoesPackageExist(TEXT("/Game/GameProject/UI/DA_CaveSlateStyle")))
 	{
-		if (UCaveUIStyle* Asset = LoadObject<UCaveUIStyle>(nullptr, AssetPath))
-		{
-			return Asset;
-		}
+		Style = LoadObject<UCaveUIStyle>(nullptr, AssetPath);
+	}
+	if (!Style)
+	{
+		Style = NewObject<UCaveUIStyle>(Outer ? Outer : GetTransientPackage());
+		Style->EmissiveTextMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GameProject/UI/Materials/M_UI_EmissiveText.M_UI_EmissiveText"));
+		Style->VignetteMaterial = nullptr;
+		Style->PromptMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GameProject/UI/Materials/M_UI_PromptPulse.M_UI_PromptPulse"));
 	}
 
-	UCaveUIStyle* Style = NewObject<UCaveUIStyle>(Outer ? Outer : GetTransientPackage());
-	Style->EmissiveTextMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GameProject/UI/Materials/M_UI_EmissiveText.M_UI_EmissiveText"));
-	Style->VignetteMaterial = nullptr;
-	Style->PromptMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GameProject/UI/Materials/M_UI_PromptPulse.M_UI_PromptPulse"));
-	Style->FontObject = LoadObject<UFont>(nullptr, TEXT("/Game/GameProject/UI/Fonts/Font_Cave.Font_Cave"));
+	Style->FontObject = MakeFredoka(Style);
 	return Style;
 }

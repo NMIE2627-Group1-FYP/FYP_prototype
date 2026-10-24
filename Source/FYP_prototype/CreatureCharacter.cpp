@@ -288,18 +288,6 @@ void ACreatureCharacter::ApplyStance()
     if (bMole)
     {
         UE_LOG(LogTemp, Log, TEXT("Entered the underground level."));
-        for (TActorIterator<AMoleNpc> It(World); It; ++It)
-        {
-            AMoleNpc* ExtraMole = *It;
-            if (!ExtraMole)
-            {
-                continue;
-            }
-            ExtraMole->SetActorHiddenInGame(true);
-            ExtraMole->SetActorEnableCollision(false);
-            ExtraMole->SetActorTickEnabled(false);
-            ExtraMole->Destroy();
-        }
     }
 }
 

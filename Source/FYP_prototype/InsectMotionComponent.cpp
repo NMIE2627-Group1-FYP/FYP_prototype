@@ -269,10 +269,8 @@ void UInsectMotionComponent::TickComponent(
 	}
 
 	Clock += DeltaTime;
-	if (bSurroundPlayer)
-	{
-		FollowPlayer(DeltaTime);
-	}
+	// Each species keeps the movement written for it and roams the burrow from where it was placed.
+	bSurroundPlayer = false;
 
 	switch (Species)
 	{

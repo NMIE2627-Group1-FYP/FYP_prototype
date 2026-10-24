@@ -129,31 +129,9 @@ void UCaveContrastComponent::ApplyExposure(float Alpha) const
 		return;
 	}
 
-	FPostProcessSettings& Settings = PostProcess->Settings;
-	const float Shade = FMath::Clamp(Alpha, 0.0f, 1.0f);
-
-	// Tint at 0 is true black (Lux 0). The UI is drawn after post-process, so the subtitles stay lit.
-	Settings.bOverride_SceneColorTint = true;
-	Settings.SceneColorTint = FLinearColor(Shade, Shade, Shade);
-
-	Settings.bOverride_AutoExposureMethod = true;
-	Settings.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
-	Settings.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
-	Settings.AutoExposureApplyPhysicalCameraExposure = false;
-	Settings.bOverride_AutoExposureBias = true;
-	Settings.AutoExposureBias = FMath::Lerp(DarkExposureBias, LitExposureBias, Shade);
-
-	Settings.bOverride_BloomIntensity = true;
-	Settings.BloomIntensity = FMath::Lerp(0.05f, 0.45f, Shade);
-
-	Settings.bOverride_VignetteIntensity = true;
-	Settings.VignetteIntensity = FMath::Lerp(1.0f, 0.35f, Shade);
-
-	Settings.bOverride_IndirectLightingIntensity = true;
-	Settings.IndirectLightingIntensity = Shade;
-
-	Settings.bOverride_AmbientCubemapIntensity = true;
-	Settings.AmbientCubemapIntensity = 0.0f;
+	// The unbound cave tint was the line filter. It multiplied the whole view, including the surface, down to black.
+	PostProcess->bEnabled = false;
+	(void)Alpha;
 }
 
 void UCaveContrastComponent::UpdateCollection(float DeltaTime)

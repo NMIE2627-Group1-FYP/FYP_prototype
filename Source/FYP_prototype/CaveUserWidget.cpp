@@ -239,12 +239,7 @@ void UCaveUserWidget::ApplyRetinalImage(UImage* Image)
 	const FString Name = Image->GetName();
 	if (Name.Contains(TEXT("Scanline")))
 	{
-		if (UMaterialInterface* Scanline = LoadObject<UMaterialInterface>(
-			nullptr, TEXT("/Game/GameProject/UI/Materials/M_UI_Scanline.M_UI_Scanline")))
-		{
-			Image->SetBrushFromMaterial(Scanline);
-		}
-		Image->SetColorAndOpacity(FLinearColor(0.898f, 0.867f, 0.796f, 0.18f));
+		Image->SetVisibility(ESlateVisibility::Collapsed);
 		return;
 	}
 
@@ -367,7 +362,7 @@ void UCaveUserWidget::ApplySharedStyle(UWidget* Widget)
 		if (Style->FontObject)
 		{
 			Font.FontObject = Style->FontObject;
-			Font.TypefaceFontName = TextStyle.Font.TypefaceFontName;
+			Font.TypefaceFontName = TEXT("Fredoka");
 			Font.Size = TextStyle.Font.Size;
 		}
 		else if (TextStyle.Font.HasValidFont())
@@ -497,7 +492,7 @@ void UCaveUserWidget::ShowPlaying()
 	}
 	if (ScanlineImage)
 	{
-		ScanlineImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		ScanlineImage->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (VignetteImage)
 	{
