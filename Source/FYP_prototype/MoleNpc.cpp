@@ -4,7 +4,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "MoleSpeechBox.h"
+#include "CaveContrastComponent.h"
+#include "CaveUserWidget.h"
 
 AMoleNpc::AMoleNpc()
 {
@@ -27,37 +28,10 @@ void AMoleNpc::BeginPlay()
 {
     Super::BeginPlay();
 
-    UWorld* World = GetWorld();
-    if (!World || !World->GetMapName().Contains(TEXT("Underground")))
-    {
-        return;
-    }
-
-    APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
-    if (!PlayerController)
-    {
-        return;
-    }
-
-    UClass* WidgetClass = LoadClass<UMoleSpeechBox>(
-        nullptr,
-        TEXT("/Game/GameProject/Blueprints/WBP_MoleSpeech.WBP_MoleSpeech_C")
-    );
-    if (!WidgetClass)
-    {
-        WidgetClass = UMoleSpeechBox::StaticClass();
-    }
-
-    SpeechBox = CreateWidget<UMoleSpeechBox>(PlayerController, WidgetClass);
-    if (!SpeechBox)
-    {
-        return;
-    }
-
-    SpeechBox->SetLines(Lines);
-    SpeechBox->WalkHint = WalkHint;
-    SpeechBox->SetWalkProgress(0.0f);
-    SpeechBox->AddToViewport(20);
+    // The player is already the mole. Extra NPC moles stay out of the burrow.
+    SetActorHiddenInGame(true);
+    SetActorEnableCollision(false);
+    SetActorTickEnabled(false);
 }
 
 void AMoleNpc::Tick(float DeltaSeconds)
@@ -100,6 +74,17 @@ void AMoleNpc::AdvanceDialogue()
     StepOrigin = Location;
     SpeechBox->SetWalkProgress(0.0f);
     SpeechBox->Advance();
+
+    if (SpeechBox->IsNarrativeFinished())
+    {
+        if (APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0))
+        {
+            if (UCaveContrastComponent* Contrast = PlayerController->FindComponentByClass<UCaveContrastComponent>())
+            {
+                Contrast->NotifyNarrativeComplete();
+            }
+        }
+    }
 }
 
 void AMoleNpc::FaceCamera()

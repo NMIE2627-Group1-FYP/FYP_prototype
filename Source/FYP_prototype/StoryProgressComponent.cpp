@@ -271,14 +271,8 @@ void UStoryProgressComponent::SampleDistance()
 		return;
 	}
 
-	const FVector Step = Location - LastLocation;
+	AccumulatedDistance += FVector::Dist2D(Location, LastLocation);
 	LastLocation = Location;
-	const FVector Forward = Owner->GetActorForwardVector().GetSafeNormal2D();
-	const float ForwardStep = FVector::DotProduct(FVector(Step.X, Step.Y, 0.0f), Forward);
-	if (ForwardStep > 0.0f)
-	{
-		AccumulatedDistance += ForwardStep;
-	}
 
 	if (!LineTexts.IsValidIndex(NextLine) || AccumulatedDistance < ThresholdForLine(NextLine))
 	{

@@ -31,7 +31,7 @@ public:
 
 	/** Keep the mole inside the arrival square until the last line has been shown. */
 	UPROPERTY(EditAnywhere, Category = "Cave")
-	bool bConfineUntilNarrativeComplete = false;
+	bool bConfineUntilNarrativeComplete = true;
 
 	/** Scene brightness reached by the last line, before the boundary is crossed. */
 	UPROPERTY(EditAnywhere, Category = "Cave", meta = (ClampMin = "0.0", ClampMax = "1.0"))

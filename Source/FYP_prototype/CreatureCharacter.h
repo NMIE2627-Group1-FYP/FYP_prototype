@@ -4,7 +4,7 @@
 #include "GameFramework/Character.h"
 #include "CreatureCharacter.generated.h"
 
-class UCreatureStartMenu;
+class UCaveUserWidget;
 class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
@@ -44,6 +44,8 @@ protected:
 
     void ShowStartMenu();
 
+    void EnsureCaveContrast();
+
     void HideManholePlaceholders();
 
     void UpdateGrassResponse();
@@ -60,8 +62,16 @@ protected:
 
     bool bAwaitingStart = false;
 
+    bool bSurfaceSpawnCaptured = false;
+
+    bool bManholeLocated = false;
+
+    FVector SurfaceSpawn = FVector::ZeroVector;
+
+    FVector ManholeLocation = FVector::ZeroVector;
+
     UPROPERTY()
-    TObjectPtr<UCreatureStartMenu> StartMenu;
+    TObjectPtr<UCaveUserWidget> StartMenu;
 
     UPROPERTY(
         EditDefaultsOnly,

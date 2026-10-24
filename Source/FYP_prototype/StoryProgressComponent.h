@@ -12,9 +12,9 @@ class UDataTable;
 class UCaveUserWidget;
 
 /**
- * Forward-walk dialogue. Distance is sampled on a 0.1s timer.
- * Only movement along the player's facing counts. Insects do not advance the lights.
- * Every light starts off. Each line wakes the next StoryLight, and the last line turns every light on.
+ * Walk-driven dialogue. Distance is sampled on a 0.1s timer.
+ * Every light starts off. Each line wakes the next StoryLight (nearest to the spawn first),
+ * and the last line brings every light in the level up to full.
  */
 UCLASS(ClassGroup = (Cave), Blueprintable, meta = (BlueprintSpawnableComponent))
 class FYP_PROTOTYPE_API UStoryProgressComponent : public UActorComponent

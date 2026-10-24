@@ -1,6 +1,8 @@
 #include "CreatureCharacter.h"
 
-#include "CreatureStartMenu.h"
+#include "CaveContrastComponent.h"
+#include "CaveUserWidget.h"
+#include "StoryProgressComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "EnhancedInputComponent.h"
@@ -8,7 +10,6 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
-#include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -18,13 +19,9 @@
 #include "BlueCubeActor.h"
 #include "ChromeSphereActor.h"
 #include "EngineUtils.h"
-<<<<<<< Updated upstream
-=======
 #include "MoleNpc.h"
-#include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/GameModeBase.h"
->>>>>>> Stashed changes
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialParameterCollection.h"
@@ -36,7 +33,6 @@
 ACreatureCharacter::ACreatureCharacter()
 {
     PrimaryActorTick.bCanEverTick = true;
-    PrimaryActorTick.bTickEvenWhenPaused = true;
 
     // Body yaws with the controller. Pitch stays on the camera.
     bUseControllerRotationYaw = true;
@@ -53,13 +49,13 @@ ACreatureCharacter::ACreatureCharacter()
 
     // Content defaults. The Blueprint can still override these.
     static ConstructorHelpers::FObjectFinder<UInputMappingContext> MappingContextAsset(
-        TEXT("/Game/L_test/Input/IMC_Player.IMC_Player")
+        TEXT("/Game/GameProject/L_test/Input/IMC_Player.IMC_Player")
     );
     static ConstructorHelpers::FObjectFinder<UInputAction> MoveActionAsset(
-        TEXT("/Game/L_test/Input/IA_Move.IA_Move")
+        TEXT("/Game/GameProject/L_test/Input/IA_Move.IA_Move")
     );
     static ConstructorHelpers::FObjectFinder<UInputAction> LookActionAsset(
-        TEXT("/Game/L_test/Input/IA_Look.IA_Look")
+        TEXT("/Game/GameProject/L_test/Input/IA_Look.IA_Look")
     );
 
     if (MappingContextAsset.Succeeded())
@@ -80,9 +76,9 @@ ACreatureCharacter::ACreatureCharacter()
 
 namespace
 {
-    const TCHAR* MappingContextPath = TEXT("/Game/L_test/Input/IMC_Player.IMC_Player");
-    const TCHAR* MoveActionPath = TEXT("/Game/L_test/Input/IA_Move.IA_Move");
-    const TCHAR* LookActionPath = TEXT("/Game/L_test/Input/IA_Look.IA_Look");
+    const TCHAR* MappingContextPath = TEXT("/Game/GameProject/L_test/Input/IMC_Player.IMC_Player");
+    const TCHAR* MoveActionPath = TEXT("/Game/GameProject/L_test/Input/IA_Move.IA_Move");
+    const TCHAR* LookActionPath = TEXT("/Game/GameProject/L_test/Input/IA_Look.IA_Look");
 }
 
 void ACreatureCharacter::ResolveInputAssets()
@@ -138,9 +134,39 @@ void ACreatureCharacter::AddDefaultMappingContext()
 }
 
 // Called when the game starts or when spawned
+void ACreatureCharacter::EnsureCaveContrast()
+{
+    APlayerController* PlayerController = Cast<APlayerController>(GetController());
+    if (!PlayerController)
+    {
+        return;
+    }
+
+    PlayerController->ConsoleCommand(TEXT("DisableAllScreenMessages"));
+
+    if (!PlayerController->FindComponentByClass<UCaveContrastComponent>())
+    {
+        UCaveContrastComponent* Contrast = NewObject<UCaveContrastComponent>(
+            PlayerController,
+            TEXT("CaveContrast"));
+        Contrast->RegisterComponent();
+    }
+
+    if (!FindComponentByClass<UStoryProgressComponent>())
+    {
+        UStoryProgressComponent* Story = NewObject<UStoryProgressComponent>(this, TEXT("StoryProgress"));
+        Story->RegisterComponent();
+    }
+}
+
 void ACreatureCharacter::BeginPlay()
 {
     Super::BeginPlay();
+
+    if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+    {
+        PlayerController->ConsoleCommand(TEXT("DisableAllScreenMessages"));
+    }
 
     TArray<UCameraComponent*> Cameras;
     GetComponents<UCameraComponent>(Cameras);
@@ -262,15 +288,17 @@ void ACreatureCharacter::ApplyStance()
     if (bMole)
     {
         UE_LOG(LogTemp, Log, TEXT("Entered the underground level."));
-
-        if (GEngine)
+        for (TActorIterator<AMoleNpc> It(World); It; ++It)
         {
-            GEngine->AddOnScreenDebugMessage(
-                2,
-                6.0f,
-                FColor::White,
-                TEXT("Entered the underground level.")
-            );
+            AMoleNpc* ExtraMole = *It;
+            if (!ExtraMole)
+            {
+                continue;
+            }
+            ExtraMole->SetActorHiddenInGame(true);
+            ExtraMole->SetActorEnableCollision(false);
+            ExtraMole->SetActorTickEnabled(false);
+            ExtraMole->Destroy();
         }
     }
 }
@@ -278,8 +306,6 @@ void ACreatureCharacter::ApplyStance()
 void ACreatureCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-
-    ApplyDirectControls();
 
     if (bBurrowTransitionStarted)
     {
@@ -300,24 +326,56 @@ void ACreatureCharacter::Tick(float DeltaSeconds)
     UpdateGrassResponse();
 
     const FVector Location = GetActorLocation();
-    const float DistanceFromManhole = FVector2D(Location.X, Location.Y).Size();
+    if (!bSurfaceSpawnCaptured)
+    {
+        SurfaceSpawn = Location;
+        bSurfaceSpawnCaptured = true;
+    }
+
+    if (!bManholeLocated)
+    {
+        for (TActorIterator<AActor> It(World); It; ++It)
+        {
+            AActor* Actor = *It;
+            if (!Actor)
+            {
+                continue;
+            }
+
+            const bool bPortal = Actor->ActorHasTag(TEXT("ManholePortal"));
+            const bool bCover = Actor->GetClass()->GetName().Contains(TEXT("Manhole"));
+            if (!bPortal && !bCover)
+            {
+                continue;
+            }
+
+            ManholeLocation = Actor->GetActorLocation();
+            bManholeLocated = true;
+            if (bPortal)
+            {
+                break;
+            }
+        }
+    }
+
+    if (!bManholeLocated)
+    {
+        return;
+    }
+
+    // The cover sits on the path ahead of the spawn. Start must not skip that walk.
+    const float WalkedFromSpawn = FVector::Dist2D(Location, SurfaceSpawn);
+    const float DistanceFromManhole = FVector::Dist2D(Location, ManholeLocation);
     const bool bStandingOnManhole =
-        DistanceFromManhole < 260.0f && Location.Z > -40.0f && Location.Z < 280.0f;
+        WalkedFromSpawn > 400.0f &&
+        DistanceFromManhole < 160.0f &&
+        Location.Z > -80.0f &&
+        Location.Z < 280.0f;
 
     if (bStandingOnManhole)
     {
         bBurrowTransitionStarted = true;
         UE_LOG(LogTemp, Log, TEXT("Entering the underground level from the manhole."));
-
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(
-                2,
-                4.0f,
-                FColor::White,
-                TEXT("Entering the underground level.")
-            );
-        }
 
         UGameplayStatics::OpenLevel(
             this,
@@ -345,16 +403,16 @@ void ACreatureCharacter::ShowStartMenu()
         return;
     }
 
-    UClass* MenuClass = LoadClass<UCreatureStartMenu>(
+    UClass* MenuClass = LoadClass<UCaveUserWidget>(
         nullptr,
         TEXT("/Game/GameProject/Blueprints/WBP_StartMenu.WBP_StartMenu_C")
     );
     if (!MenuClass)
     {
-        MenuClass = UCreatureStartMenu::StaticClass();
+        MenuClass = UCaveUserWidget::StaticClass();
     }
 
-    StartMenu = CreateWidget<UCreatureStartMenu>(PlayerController, MenuClass);
+    StartMenu = CreateWidget<UCaveUserWidget>(PlayerController, MenuClass);
 
     if (!StartMenu)
     {
@@ -374,13 +432,12 @@ void ACreatureCharacter::ShowStartMenu()
         return;
     }
 
-    StartMenu->SetIsFocusable(true);
-    FInputModeGameAndUI InputMode;
+    FInputModeUIOnly InputMode;
     InputMode.SetWidgetToFocus(StartMenu->TakeWidget());
     InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-    InputMode.SetHideCursorDuringCapture(false);
     PlayerController->SetInputMode(InputMode);
     PlayerController->SetShowMouseCursor(true);
+    PlayerController->SetPause(true);
 
     UE_LOG(LogTemp, Log, TEXT("Start menu open. Choose Start, Settings, or Quit."));
 }
@@ -389,7 +446,7 @@ void ACreatureCharacter::UpdateGrassResponse()
 {
     UMaterialParameterCollection* Collection = LoadObject<UMaterialParameterCollection>(
         nullptr,
-        TEXT("/Game/L_test/Materials/MPC_Player.MPC_Player")
+        TEXT("/Game/GameProject/L_test/Materials/MPC_Player.MPC_Player")
     );
     if (!Collection)
     {
@@ -420,17 +477,7 @@ void ACreatureCharacter::DismissStartMenu()
 
     CloseLevelMenu();
 
-    UE_LOG(LogTemp, Log, TEXT("Game started."));
-
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(
-            1,
-            4.0f,
-            FColor::White,
-            TEXT("Game started.")
-        );
-    }
+    UE_LOG(LogTemp, Log, TEXT("Game started. Follow the arrows to the manhole."));
 }
 
 void ACreatureCharacter::OpenLevelMenu()
@@ -450,6 +497,7 @@ void ACreatureCharacter::OpenLevelMenu()
         InputMode.SetHideCursorDuringCapture(false);
         PlayerController->SetInputMode(InputMode);
         PlayerController->SetShowMouseCursor(true);
+        PlayerController->SetPause(true);
     }
 }
 
@@ -460,13 +508,9 @@ void ACreatureCharacter::CloseLevelMenu()
         StartMenu->ShowPlaying();
     }
 
-    if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+    APlayerController* PlayerController = Cast<APlayerController>(GetController());
+    if (!PlayerController)
     {
-<<<<<<< Updated upstream
-        PlayerController->SetPause(false);
-        PlayerController->SetInputMode(FInputModeGameOnly());
-        PlayerController->SetShowMouseCursor(false);
-=======
         return;
     }
 
@@ -475,13 +519,6 @@ void ACreatureCharacter::CloseLevelMenu()
         if (AGameModeBase* GameMode = World->GetAuthGameMode())
         {
             GameMode->ClearPause();
-        }
-        if (UGameViewportClient* Viewport = World->GetGameViewport())
-        {
-            Viewport->SetMouseCaptureMode(EMouseCaptureMode::CapturePermanently);
-            Viewport->SetHideCursorDuringCapture(true);
-            Viewport->SetMouseLockMode(EMouseLockMode::LockOnCapture);
-            Viewport->SetIgnoreInput(false);
         }
     }
 
@@ -493,7 +530,6 @@ void ACreatureCharacter::CloseLevelMenu()
     if (UCharacterMovementComponent* Movement = GetCharacterMovement())
     {
         Movement->SetMovementMode(MOVE_Walking);
-        Movement->SetComponentTickEnabled(true);
     }
 
     AddDefaultMappingContext();
@@ -501,58 +537,7 @@ void ACreatureCharacter::CloseLevelMenu()
     if (FSlateApplication::IsInitialized())
     {
         FSlateApplication::Get().SetAllUserFocusToGameViewport();
->>>>>>> Stashed changes
     }
-}
-
-void ACreatureCharacter::ApplyDirectControls()
-{
-    if (bAwaitingStart)
-    {
-        return;
-    }
-
-    APlayerController* PlayerController = Cast<APlayerController>(GetController());
-    if (!PlayerController)
-    {
-        return;
-    }
-
-    float Forward = 0.0f;
-    float Right = 0.0f;
-    if (PlayerController->IsInputKeyDown(EKeys::W) || PlayerController->IsInputKeyDown(EKeys::Up))
-    {
-        Forward += 1.0f;
-    }
-    if (PlayerController->IsInputKeyDown(EKeys::S) || PlayerController->IsInputKeyDown(EKeys::Down))
-    {
-        Forward -= 1.0f;
-    }
-    if (PlayerController->IsInputKeyDown(EKeys::D) || PlayerController->IsInputKeyDown(EKeys::Right))
-    {
-        Right += 1.0f;
-    }
-    if (PlayerController->IsInputKeyDown(EKeys::A) || PlayerController->IsInputKeyDown(EKeys::Left))
-    {
-        Right -= 1.0f;
-    }
-
-    const float Size = FMath::Sqrt(Forward * Forward + Right * Right);
-    if (Size > 1.0f)
-    {
-        Forward /= Size;
-        Right /= Size;
-    }
-
-    const FRotator YawRotation(0.0f, PlayerController->GetControlRotation().Yaw, 0.0f);
-    AddMovementInput(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X), Forward);
-    AddMovementInput(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y), Right);
-
-    float MouseX = 0.0f;
-    float MouseY = 0.0f;
-    PlayerController->GetInputMouseDelta(MouseX, MouseY);
-    AddControllerYawInput(MouseX * 0.08f * MouseSensitivity);
-    AddControllerPitchInput(MouseY * -0.08f * MouseSensitivity);
 }
 
 void ACreatureCharacter::HandleEscape()
@@ -588,6 +573,7 @@ void ACreatureCharacter::PawnClientRestart()
 
     // Runs after this pawn is possessed by the local player.
     AddDefaultMappingContext();
+    EnsureCaveContrast();
     ShowStartMenu();
 }
 
@@ -671,12 +657,43 @@ void ACreatureCharacter::SetupPlayerInputComponent(
 // WASD movement
 void ACreatureCharacter::Move(const FInputActionValue& Value)
 {
-    // WASD is read directly in ApplyDirectControls so a broken mapping cannot block movement.
-    (void)Value;
+    if (!Controller)
+    {
+        return;
+    }
+
+    // Keep diagonal WASD at the same speed as a single direction.
+    const FVector2D MovementInput = Value.Get<FVector2D>().GetSafeNormal();
+
+    // Use horizontal facing only, not the camera's up/down angle.
+    const FRotator ControlRotation = Controller->GetControlRotation();
+
+    const FRotator YawRotation(
+        0.0f,
+        ControlRotation.Yaw,
+        0.0f
+    );
+
+    const FVector ForwardDirection =
+        FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+
+    const FVector RightDirection =
+        FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+    AddMovementInput(ForwardDirection, MovementInput.Y);
+    AddMovementInput(RightDirection, MovementInput.X);
 }
 
+// Mouse look
 void ACreatureCharacter::Look(const FInputActionValue& Value)
 {
-    // Mouse look is read directly in ApplyDirectControls.
-    (void)Value;
+    if (!Controller)
+    {
+        return;
+    }
+
+    const FVector2D LookInput = Value.Get<FVector2D>();
+
+    AddControllerYawInput(LookInput.X * MouseSensitivity);
+    AddControllerPitchInput(LookInput.Y * MouseSensitivity);
 }
