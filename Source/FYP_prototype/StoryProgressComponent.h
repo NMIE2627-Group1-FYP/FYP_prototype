@@ -7,6 +7,7 @@
 class AExponentialHeightFog;
 class ALight;
 class APostProcessVolume;
+class ASkyLight;
 class UDataTable;
 class UCaveUserWidget;
 
@@ -32,21 +33,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Story")
 	float FadeDuration = 1.5f;
 
-	/** Walked distance before the first line. */
+	/** Walked distance before the first line. 5 cm in Unreal units. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Story", meta = (ClampMin = "0.0"))
-	float FirstLineDistance = 60.0f;
+	float FirstLineDistance = 5.0f;
 
-	/** Extra walked distance between lines. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Story", meta = (ClampMin = "20.0"))
-	float LineStepDistance = 320.0f;
+	/** Extra walked distance between lines. 5 cm in Unreal units. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Story", meta = (ClampMin = "1.0"))
+	float LineStepDistance = 5.0f;
 
 	/** A line stays at least this long before walking can replace it. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Story", meta = (ClampMin = "0.0"))
-	float MinLineSeconds = 3.0f;
+	float MinLineSeconds = 0.45f;
 
 	/** Share of a story light's full intensity used before the last line. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Story", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float StepLightFraction = 0.3f;
+	float StepLightFraction = 1.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Story")
 	float AccumulatedDistance = 0.0f;
@@ -72,6 +73,9 @@ private:
 	TArray<TObjectPtr<ALight>> AmbientLights;
 
 	UPROPERTY()
+	TArray<TObjectPtr<ASkyLight>> SkyLights;
+
+	UPROPERTY()
 	TArray<TObjectPtr<AExponentialHeightFog>> Fogs;
 
 	UPROPERTY()
@@ -80,6 +84,7 @@ private:
 	TArray<float> TargetIntensity;
 	TArray<float> AmbientTargets;
 	TArray<float> FogDensities;
+	TArray<float> SkyIntensities;
 	TArray<FString> LineTexts;
 	TArray<float> RowThresholds;
 

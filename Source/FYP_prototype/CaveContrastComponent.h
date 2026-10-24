@@ -39,10 +39,10 @@ public:
 
 	/** Manual exposure bias while the burrow is dark, and once Level 1 lighting is reached. */
 	UPROPERTY(EditAnywhere, Category = "Cave")
-	float DarkExposureBias = -8.0f;
+	float DarkExposureBias = -2.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Cave")
-	float LitExposureBias = -1.0f;
+	float LitExposureBias = 0.2f;
 
 protected:
 	virtual void BeginPlay() override;

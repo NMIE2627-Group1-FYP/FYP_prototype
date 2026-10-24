@@ -14,5 +14,5 @@ struct FStoryLineRow : public FTableRowBase
 
 	/** Distance, in unreal units, at which this line and its lights appear. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Story")
-	float DistanceThreshold = 150.0f;
+	float DistanceThreshold = 5.0f;
 };

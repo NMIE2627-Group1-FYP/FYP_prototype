@@ -132,14 +132,26 @@ void UStoryProgressComponent::ApplyDarkStart()
 		return;
 	}
 
+	SkyLights.Reset();
+	SkyIntensities.Reset();
 	for (TActorIterator<ASkyLight> It(World); It; ++It)
 	{
-		It->SetActorHiddenInGame(true);
-		if (USkyLightComponent* Sky = It->GetLightComponent())
+		ASkyLight* SkyActor = *It;
+		if (!SkyActor)
 		{
+			continue;
+		}
+
+		float Intensity = 1.0f;
+		SkyActor->SetActorHiddenInGame(true);
+		if (USkyLightComponent* Sky = SkyActor->GetLightComponent())
+		{
+			Intensity = Sky->Intensity;
 			Sky->SetIntensity(0.0f);
 			Sky->SetVisibility(false);
 		}
+		SkyLights.Add(SkyActor);
+		SkyIntensities.Add(Intensity);
 	}
 
 	Fogs.Reset();
@@ -179,6 +191,22 @@ void UStoryProgressComponent::ApplyDarkStart()
 
 void UStoryProgressComponent::RestoreAtmosphere()
 {
+	for (int32 Index = 0; Index < SkyLights.Num(); ++Index)
+	{
+		ASkyLight* SkyActor = SkyLights[Index];
+		if (!SkyActor)
+		{
+			continue;
+		}
+
+		SkyActor->SetActorHiddenInGame(false);
+		if (USkyLightComponent* Sky = SkyActor->GetLightComponent())
+		{
+			Sky->SetVisibility(true);
+			Sky->SetIntensity(SkyIntensities.IsValidIndex(Index) ? SkyIntensities[Index] : 1.0f);
+		}
+	}
+
 	for (int32 Index = 0; Index < Fogs.Num(); ++Index)
 	{
 		AExponentialHeightFog* Fog = Fogs[Index];
@@ -223,8 +251,7 @@ void UStoryProgressComponent::NotifyContrast(float Progress, bool bComplete) con
 
 float UStoryProgressComponent::ThresholdForLine(int32 LineIndex) const
 {
-	const float Paced = FirstLineDistance + LineIndex * LineStepDistance;
-	return RowThresholds.IsValidIndex(LineIndex) ? FMath::Max(Paced, RowThresholds[LineIndex]) : Paced;
+	return FirstLineDistance + LineIndex * LineStepDistance;
 }
 
 void UStoryProgressComponent::SampleDistance()
@@ -276,7 +303,9 @@ void UStoryProgressComponent::RevealLine(int32 LineIndex)
 				Dialogue = CreateWidget<UCaveUserWidget>(PlayerController, WidgetClass);
 				if (Dialogue)
 				{
+					Dialogue->SetIncludeStart(false);
 					Dialogue->AddToViewport(20);
+					Dialogue->ShowPlaying();
 				}
 			}
 		}

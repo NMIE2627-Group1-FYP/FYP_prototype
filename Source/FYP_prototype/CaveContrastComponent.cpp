@@ -84,9 +84,17 @@ void UCaveContrastComponent::TickComponent(
 	}
 
 	float TargetAlpha = 1.0f;
-	if (bUnderground && !bRevealLighting)
+	if (bNarrativeComplete || bRevealLighting)
 	{
-		TargetAlpha = NarrativeProgress * NarrativeCeiling;
+		// The last line is the night itself: fog, lamps, and the grade all come up together.
+		TargetAlpha = 1.0f;
+	}
+	else if (bUnderground)
+	{
+		// Stay black until the first step. Each line then leaves enough light to read the lamp it woke.
+		TargetAlpha = NarrativeProgress <= 0.0f
+			? 0.0f
+			: FMath::Lerp(0.55f, 0.8f, NarrativeProgress);
 	}
 	const float BlendSpeed = bRevealLighting ? 0.6f : 1.2f;
 	BlendAlpha = FMath::FInterpTo(BlendAlpha, TargetAlpha, DeltaTime, BlendSpeed);
@@ -156,8 +164,8 @@ void UCaveContrastComponent::UpdateCollection(float DeltaTime)
 	}
 
 	const float Brightness = FMath::Clamp(BlendAlpha, 0.0f, 1.0f);
-	// M_UI_EmissiveText multiplies the ink colour by this, so below 1 the letters turn grey in daylight.
-	const float TargetEmissive = FMath::Lerp(1.8f, 1.0f, Brightness);
+	// M_UI_EmissiveText multiplies the ink colour by this. Keep it above 1 so the line stays lit in the black.
+	const float TargetEmissive = FMath::Lerp(2.6f, 1.7f, Brightness);
 	const float TargetShadow = FMath::Lerp(0.2f, 1.0f, Brightness);
 	const float TargetVignette = FMath::Lerp(0.15f, 0.85f, Brightness);
 	const float TargetBlur = FMath::Lerp(0.05f, 0.55f, Brightness);

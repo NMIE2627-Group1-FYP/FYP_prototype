@@ -84,6 +84,10 @@ void UCaveUserWidget::NativeConstruct()
 	if (WidgetTree)
 	{
 		ApplySharedStyle(WidgetTree->RootWidget);
+		if (!BodyText || !SpeechStack)
+		{
+			BindMissingSpeechWidgets(WidgetTree->RootWidget);
+		}
 	}
 
 	if (SpeechStack)
@@ -147,12 +151,8 @@ void UCaveUserWidget::NativeConstruct()
 
 	if (VignetteImage)
 	{
-		if (UMaterialInterface* BrushMaterial = Cast<UMaterialInterface>(VignetteImage->GetBrush().GetResourceObject()))
-		{
-			VignetteMaterial = UMaterialInstanceDynamic::Create(BrushMaterial, this);
-			VignetteImage->SetBrushFromMaterial(VignetteMaterial);
-		}
-		VignetteImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		VignetteMaterial = nullptr;
+		VignetteImage->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
 	BindButton(StartButton, TEXT("Start"));
@@ -248,9 +248,9 @@ void UCaveUserWidget::ApplyRetinalImage(UImage* Image)
 		return;
 	}
 
-	if (Name.Contains(TEXT("Vignette")) && Style && Style->VignetteMaterial)
+	if (Name.Contains(TEXT("Vignette")))
 	{
-		Image->SetBrushFromMaterial(Style->VignetteMaterial);
+		Image->SetVisibility(ESlateVisibility::Collapsed);
 		return;
 	}
 
@@ -303,6 +303,49 @@ void UCaveUserWidget::BindButton(UButton* Button, FName Handler)
 	}
 }
 
+void UCaveUserWidget::BindMissingSpeechWidgets(UWidget* Widget)
+{
+	if (!Widget)
+	{
+		return;
+	}
+
+	const FString Name = Widget->GetName();
+	if (!BodyText)
+	{
+		if (UTextBlock* Text = Cast<UTextBlock>(Widget))
+		{
+			if (Name == TEXT("BodyText") || Name.Contains(TEXT("Speech")) || Name.Contains(TEXT("Dialogue")))
+			{
+				BodyText = Text;
+			}
+		}
+	}
+	if (!SpeechStack && (Name == TEXT("SpeechStack") || Name.Contains(TEXT("Speech"))))
+	{
+		SpeechStack = Widget;
+	}
+	if (!VignetteImage)
+	{
+		if (UImage* Image = Cast<UImage>(Widget))
+		{
+			if (Name.Contains(TEXT("Vignette")))
+			{
+				VignetteImage = Image;
+				VignetteImage->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		}
+	}
+
+	if (UPanelWidget* Panel = Cast<UPanelWidget>(Widget))
+	{
+		for (int32 Index = 0; Index < Panel->GetChildrenCount(); ++Index)
+		{
+			BindMissingSpeechWidgets(Panel->GetChildAt(Index));
+		}
+	}
+}
+
 void UCaveUserWidget::ApplySharedStyle(UWidget* Widget)
 {
 	if (!Widget || !Style)
@@ -336,8 +379,22 @@ void UCaveUserWidget::ApplySharedStyle(UWidget* Widget)
 			Font.Size = TextStyle.Font.Size;
 		}
 
-		const bool bSubtitle = Name == TEXT("BodyText") || Name.Contains(TEXT("Speaker")) || Name.Contains(TEXT("SpeechHint"));
-		Font.FontMaterial = bSubtitle ? Style->EmissiveTextMaterial.Get() : nullptr;
+		const bool bDialogueText =
+			Name == TEXT("BodyText") ||
+			Name == TEXT("SpeakerText") ||
+			Name == TEXT("SpeechHintText");
+		if (bDialogueText)
+		{
+			Font.FontMaterial = LoadObject<UMaterialInterface>(
+				nullptr,
+				TEXT("/Game/GameProject/UI/Materials/M_UI_EmissiveText.M_UI_EmissiveText"));
+		}
+		else
+		{
+			Font.FontMaterial = nullptr;
+		}
+		Font.OutlineSettings.OutlineSize = FMath::Max(Font.OutlineSettings.OutlineSize, 2);
+		Font.OutlineSettings.OutlineColor = FLinearColor::Black;
 
 		Text->SetFont(Font);
 		Text->SetColorAndOpacity(TextStyle.ColorAndOpacity);
@@ -397,6 +454,7 @@ void UCaveUserWidget::ShowStartCard()
 {
 	bCardOpen = true;
 	bReturnToStart = true;
+	SetVisibility(ESlateVisibility::Visible);
 	if (TitleText)
 	{
 		TitleText->SetText(ProjectTitle);
@@ -412,6 +470,7 @@ void UCaveUserWidget::ShowLevelCard()
 {
 	bCardOpen = true;
 	bReturnToStart = false;
+	SetVisibility(ESlateVisibility::Visible);
 	if (TitleText)
 	{
 		TitleText->SetText(bIncludeStart ? ProjectTitle : INVTEXT("Underground"));
@@ -426,17 +485,39 @@ void UCaveUserWidget::ShowLevelCard()
 void UCaveUserWidget::ShowPlaying()
 {
 	bCardOpen = false;
+	// The menu used to stay a full-screen hit target, so WASD and the mouse never reached the pawn.
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	SetPanelVisible(Card, false);
 	SetPanelVisible(StartPanel, false);
 	SetPanelVisible(LevelPanel, false);
 	SetPanelVisible(SettingsPanel, false);
-	SetPanelVisible(Hint, true);
+	if (Hint)
+	{
+		Hint->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	if (ScanlineImage)
+	{
+		ScanlineImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	if (VignetteImage)
+	{
+		VignetteImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (SpeechStack)
+	{
+		SpeechStack->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	if (BodyText)
+	{
+		BodyText->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
 }
 
 void UCaveUserWidget::ShowSettings()
 {
 	bReturnToStart = StartPanel && StartPanel->GetVisibility() == ESlateVisibility::Visible;
 	bCardOpen = true;
+	SetVisibility(ESlateVisibility::Visible);
 	SetPanelVisible(Card, true);
 	SetPanelVisible(StartPanel, false);
 	SetPanelVisible(LevelPanel, false);
@@ -624,14 +705,32 @@ void UCaveUserWidget::SetWalkProgress(float Amount)
 
 void UCaveUserWidget::RefreshSpeech()
 {
+	if (VignetteImage)
+	{
+		VignetteImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if (SpeechStack)
+	{
+		SpeechStack->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+
 	if (SpeakerText)
 	{
 		SpeakerText->SetText(SpeakerName);
+		SpeakerText->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 
 	if (BodyText && Lines.IsValidIndex(CurrentLine))
 	{
+		FSlateFontInfo Font = BodyText->GetFont();
+		Font.FontMaterial = LoadObject<UMaterialInterface>(
+			nullptr,
+			TEXT("/Game/GameProject/UI/Materials/M_UI_EmissiveText.M_UI_EmissiveText"));
+		BodyText->SetFont(Font);
 		BodyText->SetText(Lines[CurrentLine]);
+		BodyText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		BodyText->SetColorAndOpacity(FSlateColor(FLinearColor(0.898f, 0.867f, 0.796f, 1.0f)));
 	}
 
 	if (SpeechHintText)
@@ -661,14 +760,10 @@ void UCaveUserWidget::BeginLineFade()
 		return;
 	}
 
-	FadeAlpha = 0.0f;
-	BodyText->SetRenderOpacity(0.0f);
+	FadeAlpha = 0.55f;
+	BodyText->SetRenderOpacity(0.55f);
 	BodyText->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	BodyText->SetRenderScale(FVector2D(1.04f, 1.04f));
-	if (VignetteMaterial)
-	{
-		VignetteMaterial->SetScalarParameterValue(TEXT("BlurAmount"), 2.4f);
-	}
 
 	if (UWorld* World = GetWorld())
 	{
@@ -678,7 +773,11 @@ void UCaveUserWidget::BeginLineFade()
 			&UCaveUserWidget::TickLineFade,
 			0.016f,
 			true);
+		return;
 	}
+
+	FadeAlpha = 1.0f;
+	BodyText->SetRenderOpacity(1.0f);
 }
 
 void UCaveUserWidget::TickLineFade()
@@ -692,11 +791,6 @@ void UCaveUserWidget::TickLineFade()
 		const float RestShadow = Style ? Style->BodyStyle.ShadowOffset.Y : 1.0f;
 		const float Shadow = FMath::Lerp(8.0f, RestShadow, FadeAlpha);
 		BodyText->SetShadowOffset(FVector2D(Shadow, Shadow));
-	}
-
-	if (VignetteMaterial)
-	{
-		VignetteMaterial->SetScalarParameterValue(TEXT("BlurAmount"), 1.0f - FadeAlpha);
 	}
 
 	if (FadeAlpha > 0.98f)

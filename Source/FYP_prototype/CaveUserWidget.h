@@ -104,6 +104,7 @@ protected:
 
 private:
 	void ApplySharedStyle(UWidget* Widget);
+	void BindMissingSpeechWidgets(UWidget* Widget);
 	void ApplyPanelVisibility();
 	void RefreshSpeech();
 	void BeginLineFade();

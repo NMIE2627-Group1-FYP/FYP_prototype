@@ -65,7 +65,7 @@ UCaveUIStyle* UCaveUIStyle::Load(UObject* Outer)
 
 	UCaveUIStyle* Style = NewObject<UCaveUIStyle>(Outer ? Outer : GetTransientPackage());
 	Style->EmissiveTextMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GameProject/UI/Materials/M_UI_EmissiveText.M_UI_EmissiveText"));
-	Style->VignetteMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GameProject/UI/Materials/M_UI_TextVignette.M_UI_TextVignette"));
+	Style->VignetteMaterial = nullptr;
 	Style->PromptMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/GameProject/UI/Materials/M_UI_PromptPulse.M_UI_PromptPulse"));
 	Style->FontObject = LoadObject<UFont>(nullptr, TEXT("/Game/GameProject/UI/Fonts/Font_Cave.Font_Cave"));
 	return Style;

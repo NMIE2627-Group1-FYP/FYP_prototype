@@ -20,6 +20,8 @@
 #include "ChromeSphereActor.h"
 #include "EngineUtils.h"
 #include "MoleNpc.h"
+#include "Framework/Application/SlateApplication.h"
+#include "GameFramework/GameModeBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialParameterCollection.h"
@@ -324,9 +326,51 @@ void ACreatureCharacter::Tick(float DeltaSeconds)
     UpdateGrassResponse();
 
     const FVector Location = GetActorLocation();
-    const float DistanceFromManhole = FVector2D(Location.X, Location.Y).Size();
+    if (!bSurfaceSpawnCaptured)
+    {
+        SurfaceSpawn = Location;
+        bSurfaceSpawnCaptured = true;
+    }
+
+    if (!bManholeLocated)
+    {
+        for (TActorIterator<AActor> It(World); It; ++It)
+        {
+            AActor* Actor = *It;
+            if (!Actor)
+            {
+                continue;
+            }
+
+            const bool bPortal = Actor->ActorHasTag(TEXT("ManholePortal"));
+            const bool bCover = Actor->GetClass()->GetName().Contains(TEXT("Manhole"));
+            if (!bPortal && !bCover)
+            {
+                continue;
+            }
+
+            ManholeLocation = Actor->GetActorLocation();
+            bManholeLocated = true;
+            if (bPortal)
+            {
+                break;
+            }
+        }
+    }
+
+    if (!bManholeLocated)
+    {
+        return;
+    }
+
+    // The cover sits on the path ahead of the spawn. Start must not skip that walk.
+    const float WalkedFromSpawn = FVector::Dist2D(Location, SurfaceSpawn);
+    const float DistanceFromManhole = FVector::Dist2D(Location, ManholeLocation);
     const bool bStandingOnManhole =
-        DistanceFromManhole < 260.0f && Location.Z > -40.0f && Location.Z < 280.0f;
+        WalkedFromSpawn > 400.0f &&
+        DistanceFromManhole < 160.0f &&
+        Location.Z > -80.0f &&
+        Location.Z < 280.0f;
 
     if (bStandingOnManhole)
     {
@@ -433,12 +477,7 @@ void ACreatureCharacter::DismissStartMenu()
 
     CloseLevelMenu();
 
-    UE_LOG(LogTemp, Log, TEXT("Game started."));
-
-    UGameplayStatics::OpenLevel(
-        this,
-        FName(TEXT("/Game/GameProject/Levels/Underground"))
-    );
+    UE_LOG(LogTemp, Log, TEXT("Game started. Follow the arrows to the manhole."));
 }
 
 void ACreatureCharacter::OpenLevelMenu()
@@ -469,11 +508,35 @@ void ACreatureCharacter::CloseLevelMenu()
         StartMenu->ShowPlaying();
     }
 
-    if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+    APlayerController* PlayerController = Cast<APlayerController>(GetController());
+    if (!PlayerController)
     {
-        PlayerController->SetPause(false);
-        PlayerController->SetInputMode(FInputModeGameOnly());
-        PlayerController->SetShowMouseCursor(false);
+        return;
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (AGameModeBase* GameMode = World->GetAuthGameMode())
+        {
+            GameMode->ClearPause();
+        }
+    }
+
+    PlayerController->SetPause(false);
+    PlayerController->ResetIgnoreMoveInput();
+    PlayerController->ResetIgnoreLookInput();
+    EnableInput(PlayerController);
+
+    if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+    {
+        Movement->SetMovementMode(MOVE_Walking);
+    }
+
+    AddDefaultMappingContext();
+
+    if (FSlateApplication::IsInitialized())
+    {
+        FSlateApplication::Get().SetAllUserFocusToGameViewport();
     }
 }
 

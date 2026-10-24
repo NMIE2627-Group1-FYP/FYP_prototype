@@ -60,6 +60,14 @@ protected:
 
     bool bAwaitingStart = false;
 
+    bool bSurfaceSpawnCaptured = false;
+
+    bool bManholeLocated = false;
+
+    FVector SurfaceSpawn = FVector::ZeroVector;
+
+    FVector ManholeLocation = FVector::ZeroVector;
+
     UPROPERTY()
     TObjectPtr<UCaveUserWidget> StartMenu;
 
