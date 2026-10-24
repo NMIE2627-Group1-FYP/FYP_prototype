@@ -48,6 +48,8 @@ protected:
 
     void UpdateGrassResponse();
 
+    void ApplyDirectControls();
+
     void OpenLevelMenu();
 
     void HandleEscape();

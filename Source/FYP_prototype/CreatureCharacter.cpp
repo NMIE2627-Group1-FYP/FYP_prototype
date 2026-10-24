@@ -18,6 +18,13 @@
 #include "BlueCubeActor.h"
 #include "ChromeSphereActor.h"
 #include "EngineUtils.h"
+<<<<<<< Updated upstream
+=======
+#include "MoleNpc.h"
+#include "Engine/GameViewportClient.h"
+#include "Framework/Application/SlateApplication.h"
+#include "GameFramework/GameModeBase.h"
+>>>>>>> Stashed changes
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialParameterCollection.h"
@@ -29,6 +36,7 @@
 ACreatureCharacter::ACreatureCharacter()
 {
     PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.bTickEvenWhenPaused = true;
 
     // Body yaws with the controller. Pitch stays on the camera.
     bUseControllerRotationYaw = true;
@@ -271,6 +279,8 @@ void ACreatureCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
 
+    ApplyDirectControls();
+
     if (bBurrowTransitionStarted)
     {
         return;
@@ -364,12 +374,13 @@ void ACreatureCharacter::ShowStartMenu()
         return;
     }
 
-    FInputModeUIOnly InputMode;
+    StartMenu->SetIsFocusable(true);
+    FInputModeGameAndUI InputMode;
     InputMode.SetWidgetToFocus(StartMenu->TakeWidget());
     InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+    InputMode.SetHideCursorDuringCapture(false);
     PlayerController->SetInputMode(InputMode);
     PlayerController->SetShowMouseCursor(true);
-    PlayerController->SetPause(true);
 
     UE_LOG(LogTemp, Log, TEXT("Start menu open. Choose Start, Settings, or Quit."));
 }
@@ -439,7 +450,6 @@ void ACreatureCharacter::OpenLevelMenu()
         InputMode.SetHideCursorDuringCapture(false);
         PlayerController->SetInputMode(InputMode);
         PlayerController->SetShowMouseCursor(true);
-        PlayerController->SetPause(true);
     }
 }
 
@@ -452,10 +462,97 @@ void ACreatureCharacter::CloseLevelMenu()
 
     if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
     {
+<<<<<<< Updated upstream
         PlayerController->SetPause(false);
         PlayerController->SetInputMode(FInputModeGameOnly());
         PlayerController->SetShowMouseCursor(false);
+=======
+        return;
     }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (AGameModeBase* GameMode = World->GetAuthGameMode())
+        {
+            GameMode->ClearPause();
+        }
+        if (UGameViewportClient* Viewport = World->GetGameViewport())
+        {
+            Viewport->SetMouseCaptureMode(EMouseCaptureMode::CapturePermanently);
+            Viewport->SetHideCursorDuringCapture(true);
+            Viewport->SetMouseLockMode(EMouseLockMode::LockOnCapture);
+            Viewport->SetIgnoreInput(false);
+        }
+    }
+
+    PlayerController->SetPause(false);
+    PlayerController->ResetIgnoreMoveInput();
+    PlayerController->ResetIgnoreLookInput();
+    EnableInput(PlayerController);
+
+    if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+    {
+        Movement->SetMovementMode(MOVE_Walking);
+        Movement->SetComponentTickEnabled(true);
+    }
+
+    AddDefaultMappingContext();
+
+    if (FSlateApplication::IsInitialized())
+    {
+        FSlateApplication::Get().SetAllUserFocusToGameViewport();
+>>>>>>> Stashed changes
+    }
+}
+
+void ACreatureCharacter::ApplyDirectControls()
+{
+    if (bAwaitingStart)
+    {
+        return;
+    }
+
+    APlayerController* PlayerController = Cast<APlayerController>(GetController());
+    if (!PlayerController)
+    {
+        return;
+    }
+
+    float Forward = 0.0f;
+    float Right = 0.0f;
+    if (PlayerController->IsInputKeyDown(EKeys::W) || PlayerController->IsInputKeyDown(EKeys::Up))
+    {
+        Forward += 1.0f;
+    }
+    if (PlayerController->IsInputKeyDown(EKeys::S) || PlayerController->IsInputKeyDown(EKeys::Down))
+    {
+        Forward -= 1.0f;
+    }
+    if (PlayerController->IsInputKeyDown(EKeys::D) || PlayerController->IsInputKeyDown(EKeys::Right))
+    {
+        Right += 1.0f;
+    }
+    if (PlayerController->IsInputKeyDown(EKeys::A) || PlayerController->IsInputKeyDown(EKeys::Left))
+    {
+        Right -= 1.0f;
+    }
+
+    const float Size = FMath::Sqrt(Forward * Forward + Right * Right);
+    if (Size > 1.0f)
+    {
+        Forward /= Size;
+        Right /= Size;
+    }
+
+    const FRotator YawRotation(0.0f, PlayerController->GetControlRotation().Yaw, 0.0f);
+    AddMovementInput(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X), Forward);
+    AddMovementInput(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y), Right);
+
+    float MouseX = 0.0f;
+    float MouseY = 0.0f;
+    PlayerController->GetInputMouseDelta(MouseX, MouseY);
+    AddControllerYawInput(MouseX * 0.08f * MouseSensitivity);
+    AddControllerPitchInput(MouseY * -0.08f * MouseSensitivity);
 }
 
 void ACreatureCharacter::HandleEscape()
@@ -574,43 +671,12 @@ void ACreatureCharacter::SetupPlayerInputComponent(
 // WASD movement
 void ACreatureCharacter::Move(const FInputActionValue& Value)
 {
-    if (!Controller)
-    {
-        return;
-    }
-
-    // Keep diagonal WASD at the same speed as a single direction.
-    const FVector2D MovementInput = Value.Get<FVector2D>().GetSafeNormal();
-
-    // Use horizontal facing only, not the camera's up/down angle.
-    const FRotator ControlRotation = Controller->GetControlRotation();
-
-    const FRotator YawRotation(
-        0.0f,
-        ControlRotation.Yaw,
-        0.0f
-    );
-
-    const FVector ForwardDirection =
-        FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-
-    const FVector RightDirection =
-        FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
-    AddMovementInput(ForwardDirection, MovementInput.Y);
-    AddMovementInput(RightDirection, MovementInput.X);
+    // WASD is read directly in ApplyDirectControls so a broken mapping cannot block movement.
+    (void)Value;
 }
 
-// Mouse look
 void ACreatureCharacter::Look(const FInputActionValue& Value)
 {
-    if (!Controller)
-    {
-        return;
-    }
-
-    const FVector2D LookInput = Value.Get<FVector2D>();
-
-    AddControllerYawInput(LookInput.X * MouseSensitivity);
-    AddControllerPitchInput(LookInput.Y * MouseSensitivity);
+    // Mouse look is read directly in ApplyDirectControls.
+    (void)Value;
 }
