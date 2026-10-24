@@ -1,6 +1,8 @@
 #include "CreatureCharacter.h"
 
-#include "CreatureStartMenu.h"
+#include "CaveContrastComponent.h"
+#include "CaveUserWidget.h"
+#include "StoryProgressComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "EnhancedInputComponent.h"
@@ -8,7 +10,6 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
-#include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -18,6 +19,7 @@
 #include "BlueCubeActor.h"
 #include "ChromeSphereActor.h"
 #include "EngineUtils.h"
+#include "MoleNpc.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialParameterCollection.h"
@@ -45,13 +47,13 @@ ACreatureCharacter::ACreatureCharacter()
 
     // Content defaults. The Blueprint can still override these.
     static ConstructorHelpers::FObjectFinder<UInputMappingContext> MappingContextAsset(
-        TEXT("/Game/L_test/Input/IMC_Player.IMC_Player")
+        TEXT("/Game/GameProject/L_test/Input/IMC_Player.IMC_Player")
     );
     static ConstructorHelpers::FObjectFinder<UInputAction> MoveActionAsset(
-        TEXT("/Game/L_test/Input/IA_Move.IA_Move")
+        TEXT("/Game/GameProject/L_test/Input/IA_Move.IA_Move")
     );
     static ConstructorHelpers::FObjectFinder<UInputAction> LookActionAsset(
-        TEXT("/Game/L_test/Input/IA_Look.IA_Look")
+        TEXT("/Game/GameProject/L_test/Input/IA_Look.IA_Look")
     );
 
     if (MappingContextAsset.Succeeded())
@@ -72,9 +74,9 @@ ACreatureCharacter::ACreatureCharacter()
 
 namespace
 {
-    const TCHAR* MappingContextPath = TEXT("/Game/L_test/Input/IMC_Player.IMC_Player");
-    const TCHAR* MoveActionPath = TEXT("/Game/L_test/Input/IA_Move.IA_Move");
-    const TCHAR* LookActionPath = TEXT("/Game/L_test/Input/IA_Look.IA_Look");
+    const TCHAR* MappingContextPath = TEXT("/Game/GameProject/L_test/Input/IMC_Player.IMC_Player");
+    const TCHAR* MoveActionPath = TEXT("/Game/GameProject/L_test/Input/IA_Move.IA_Move");
+    const TCHAR* LookActionPath = TEXT("/Game/GameProject/L_test/Input/IA_Look.IA_Look");
 }
 
 void ACreatureCharacter::ResolveInputAssets()
@@ -130,9 +132,39 @@ void ACreatureCharacter::AddDefaultMappingContext()
 }
 
 // Called when the game starts or when spawned
+void ACreatureCharacter::EnsureCaveContrast()
+{
+    APlayerController* PlayerController = Cast<APlayerController>(GetController());
+    if (!PlayerController)
+    {
+        return;
+    }
+
+    PlayerController->ConsoleCommand(TEXT("DisableAllScreenMessages"));
+
+    if (!PlayerController->FindComponentByClass<UCaveContrastComponent>())
+    {
+        UCaveContrastComponent* Contrast = NewObject<UCaveContrastComponent>(
+            PlayerController,
+            TEXT("CaveContrast"));
+        Contrast->RegisterComponent();
+    }
+
+    if (!FindComponentByClass<UStoryProgressComponent>())
+    {
+        UStoryProgressComponent* Story = NewObject<UStoryProgressComponent>(this, TEXT("StoryProgress"));
+        Story->RegisterComponent();
+    }
+}
+
 void ACreatureCharacter::BeginPlay()
 {
     Super::BeginPlay();
+
+    if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+    {
+        PlayerController->ConsoleCommand(TEXT("DisableAllScreenMessages"));
+    }
 
     TArray<UCameraComponent*> Cameras;
     GetComponents<UCameraComponent>(Cameras);
@@ -254,15 +286,17 @@ void ACreatureCharacter::ApplyStance()
     if (bMole)
     {
         UE_LOG(LogTemp, Log, TEXT("Entered the underground level."));
-
-        if (GEngine)
+        for (TActorIterator<AMoleNpc> It(World); It; ++It)
         {
-            GEngine->AddOnScreenDebugMessage(
-                2,
-                6.0f,
-                FColor::White,
-                TEXT("Entered the underground level.")
-            );
+            AMoleNpc* ExtraMole = *It;
+            if (!ExtraMole)
+            {
+                continue;
+            }
+            ExtraMole->SetActorHiddenInGame(true);
+            ExtraMole->SetActorEnableCollision(false);
+            ExtraMole->SetActorTickEnabled(false);
+            ExtraMole->Destroy();
         }
     }
 }
@@ -299,16 +333,6 @@ void ACreatureCharacter::Tick(float DeltaSeconds)
         bBurrowTransitionStarted = true;
         UE_LOG(LogTemp, Log, TEXT("Entering the underground level from the manhole."));
 
-        if (GEngine)
-        {
-            GEngine->AddOnScreenDebugMessage(
-                2,
-                4.0f,
-                FColor::White,
-                TEXT("Entering the underground level.")
-            );
-        }
-
         UGameplayStatics::OpenLevel(
             this,
             FName(TEXT("/Game/GameProject/Levels/Underground"))
@@ -335,16 +359,16 @@ void ACreatureCharacter::ShowStartMenu()
         return;
     }
 
-    UClass* MenuClass = LoadClass<UCreatureStartMenu>(
+    UClass* MenuClass = LoadClass<UCaveUserWidget>(
         nullptr,
         TEXT("/Game/GameProject/Blueprints/WBP_StartMenu.WBP_StartMenu_C")
     );
     if (!MenuClass)
     {
-        MenuClass = UCreatureStartMenu::StaticClass();
+        MenuClass = UCaveUserWidget::StaticClass();
     }
 
-    StartMenu = CreateWidget<UCreatureStartMenu>(PlayerController, MenuClass);
+    StartMenu = CreateWidget<UCaveUserWidget>(PlayerController, MenuClass);
 
     if (!StartMenu)
     {
@@ -378,7 +402,7 @@ void ACreatureCharacter::UpdateGrassResponse()
 {
     UMaterialParameterCollection* Collection = LoadObject<UMaterialParameterCollection>(
         nullptr,
-        TEXT("/Game/L_test/Materials/MPC_Player.MPC_Player")
+        TEXT("/Game/GameProject/L_test/Materials/MPC_Player.MPC_Player")
     );
     if (!Collection)
     {
@@ -411,15 +435,10 @@ void ACreatureCharacter::DismissStartMenu()
 
     UE_LOG(LogTemp, Log, TEXT("Game started."));
 
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(
-            1,
-            4.0f,
-            FColor::White,
-            TEXT("Game started.")
-        );
-    }
+    UGameplayStatics::OpenLevel(
+        this,
+        FName(TEXT("/Game/GameProject/Levels/Underground"))
+    );
 }
 
 void ACreatureCharacter::OpenLevelMenu()
@@ -491,6 +510,7 @@ void ACreatureCharacter::PawnClientRestart()
 
     // Runs after this pawn is possessed by the local player.
     AddDefaultMappingContext();
+    EnsureCaveContrast();
     ShowStartMenu();
 }
 

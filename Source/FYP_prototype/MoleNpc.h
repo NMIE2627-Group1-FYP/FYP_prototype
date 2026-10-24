@@ -4,7 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "MoleNpc.generated.h"
 
-class UMoleSpeechBox;
+class UCaveUserWidget;
 
 UCLASS(Blueprintable)
 class FYP_PROTOTYPE_API AMoleNpc : public AActor
@@ -32,7 +32,7 @@ protected:
 
 private:
     UPROPERTY()
-    TObjectPtr<UMoleSpeechBox> SpeechBox;
+    TObjectPtr<UCaveUserWidget> SpeechBox;
 
     void FaceCamera();
 

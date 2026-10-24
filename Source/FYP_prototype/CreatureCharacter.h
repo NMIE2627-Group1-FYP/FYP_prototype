@@ -4,7 +4,7 @@
 #include "GameFramework/Character.h"
 #include "CreatureCharacter.generated.h"
 
-class UCreatureStartMenu;
+class UCaveUserWidget;
 class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
@@ -44,6 +44,8 @@ protected:
 
     void ShowStartMenu();
 
+    void EnsureCaveContrast();
+
     void HideManholePlaceholders();
 
     void UpdateGrassResponse();
@@ -59,7 +61,7 @@ protected:
     bool bAwaitingStart = false;
 
     UPROPERTY()
-    TObjectPtr<UCreatureStartMenu> StartMenu;
+    TObjectPtr<UCaveUserWidget> StartMenu;
 
     UPROPERTY(
         EditDefaultsOnly,
